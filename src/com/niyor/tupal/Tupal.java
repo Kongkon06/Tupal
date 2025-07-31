@@ -69,7 +69,7 @@ private static List<String> StringToUnicode(String file) {
         String hex = String.format("%04X", code);
 
         // Handle special characters: ; \n { }
-        if (lexeme == ';' || lexeme == '\n' || lexeme == '{' || lexeme == '}') {
+        if (lexeme == ';' || lexeme == '\n' || lexeme == '(' || lexeme == ')' || lexeme == '{' || lexeme == '}') {
             if (word.length() > 0) {
                 words.add(word.toString().trim());
                 word.setLength(0);
