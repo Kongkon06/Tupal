@@ -1,0 +1,3 @@
+In isAplha delete the loop when are only going to check is the first hexcode does represent a aplhjabatical character or not. if yes then return true
+
+filter semicolon while converting to unicode 
