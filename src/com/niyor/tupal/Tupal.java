@@ -54,6 +54,9 @@ class Tupal{
  private static void run(List<String> source){
   Scanner scanner = new Scanner(source);
   List<Token> tokens = scanner.scanTokens();
+  for(Token token : tokens){
+    System.out.println(token);
+  }
   Parser parser = new Parser(tokens);
   List<Stmt> statements = parser.parse();
   if(hadError) return;

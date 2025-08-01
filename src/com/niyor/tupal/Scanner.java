@@ -27,7 +27,7 @@ class Scanner {
         assameseKeyword.put("09AB 09B2 09A8", FUN);
         assameseKeyword.put("099A 09B2 0995", VAR);
         assameseKeyword.put("09AA 09B0 09BF 09A6 09BE 09A8", RETURN);
-        assameseKeyword.put("09AF 09C7 09A4 09BF 09BE", FOR);
+        assameseKeyword.put("09DF 09C7 09A4 09BF 09DF 09BE", FOR);
         assameseKeyword.put("0996 09BE 09A8 09CD 09A6 09BF", WHILE);
         assameseKeyword.put("09AA 09CD 09F0 0995 09BE 09B6", PRINT);
     }
