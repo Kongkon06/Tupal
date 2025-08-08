@@ -1,4 +1,3 @@
-
 package com.niyor.tupal;
 
 import java.util.List;
@@ -22,9 +21,10 @@ class UnicodeToToken {
         assameseNumber.put("09E6", "0");
     }
 
-    public String getLiteral(List<String> digits) {
+    public String getLiteral(String digits) {
+        String[] digitsList = digits.split(" ");
         StringBuilder result = new StringBuilder();
-        for (String code : digits) {
+        for (String code : digitsList) {
             String mapped = assameseNumber.get(code);
             if (mapped != null) {
                 result.append(mapped);
@@ -44,5 +44,19 @@ class UnicodeToToken {
     }
     return result.toString();
 }
-}
+    public static String fromUnicodeHex(String hexInput) {
+        String[] hexCodes = hexInput.trim().split("\\s+");
+        StringBuilder result = new StringBuilder();
 
+        for (String hex : hexCodes) {
+            try {
+                int codePoint = Integer.parseInt(hex, 16);
+                result.append(Character.toChars(codePoint));
+            } catch (NumberFormatException e) {
+                System.err.println("Invalid hex: " + hex);
+            }
+        }
+
+        return result.toString();
+    }
+}

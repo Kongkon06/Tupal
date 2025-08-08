@@ -22,10 +22,8 @@ class Tupal{
   }
   else if(args.length == 1){
     runfile(args[0]);
-    System.exit(68);
   } else {
     runPrompt();
-    System.exit(68);
   }
 
  }
