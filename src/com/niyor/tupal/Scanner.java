@@ -96,27 +96,38 @@ return tokens;
 
 
     private void identifier() {
-
-        String text = source.get(current-1);
+        // Use (current - 1) because advance() in scanToken already moved the cursor forward.
+        String text = source.get(current - 1);
+        
         TokenType type = assameseKeyword.getOrDefault(text, IDENTIFIER);
         addToken(type);
     }
 
-private void string(){
-StringBuilder word = new StringBuilder();
-int start =current;
-while (peek() != "0022" && !isAtEnd()) {
-if (peek() == "000A") line++;
-word.append(advance());
+
+
+private void string() {
+    StringBuilder word = new StringBuilder();
+
+    while (!peek().equals("0022") && !isAtEnd()) {
+        if (peek().equals("000A")) line++;
+
+        if (word.length() > 0) word.append(" ");
+        word.append(advance());
+
+        System.out.println("String so far: " + word);
+    }
+
+    if (isAtEnd()) {
+        Tupal.error(line, "Unterminated string.");
+        return;
+    }
+
+    advance(); // consume closing "
+
+    addToken(STRING, assm.fromUnicodeHex(word.toString()));
 }
-if (isAtEnd()) {
-Tupal.error(line, "Unterminated string.");
-return;
-}
-advance();
-// Trim the surrounding quotes.
-addToken(STRING, word);
-}
+
+
     private void number() {
         while (isDigit(peek())) advance();
 
@@ -133,7 +144,7 @@ addToken(STRING, word);
 
 private boolean match(String expected) {
 if (isAtEnd()) return false;
-if (source.get(current) != expected) return false;
+if (!source.get(current).equals(expected)) return false;
 current++;
 return true;
 }

@@ -1,10 +1,33 @@
 package com.niyor.tupal;
 
+import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 class Interpreter implements Expr.Visitor<Object>,Stmt.Visitor<Void>{
 
-private Environment environment = new Environment();
+final Environment globals = new Environment(); 
+private Environment environment = globals;
+private final Map<Expr,Integer> locals = new HashMap<>();
+
+Interpreter(){
+  globals.define("clock", new TupalCallable() {
+    
+    @Override
+    public int arity(){ return 0;}
+
+    @Override
+    public Object call(Interpreter interpreter, List<Object> arguments) {
+      return (double)System.currentTimeMillis() /1000.0;
+    }
+    public String toString(){
+      return "<native fn>";
+    }
+  });
+  
+}
+
 @Override
 public Object visitLiteralExpr(Expr.Literal expr) {
 return expr.value;
@@ -19,6 +42,24 @@ if (isTruthy(left)) return left;
 if (!isTruthy(left)) return left;
 }
 return evaluate(expr.right);
+}
+
+@Override
+public Object visitSetExpr(Expr.Set expr){
+  Object object = evaluate(expr.object);
+
+  if(!(object instanceof TupalInstance)){
+    throw new RuntimeError(expr.name,"Only instances have fields.");
+  }
+
+  Object value = evaluate(expr.value);
+  ((TupalInstance)object).set(expr.name, value);
+  return value;
+}
+
+@Override
+public Object visitThisExpr(Expr.This expr){
+  return lookUpVariable(expr.keyword, expr);
 }
 
 @Override
@@ -42,9 +83,17 @@ return null;
 
 @Override
 public Object visitVariableExpr(Expr.Variable expr) {
-return environment.get(expr.name);
+return lookUpVariable(expr.name,expr);
 }
 
+private Object lookUpVariable(Token name,Expr expr){
+  Integer distance = locals.get(expr);
+  if(distance != null){
+    return environment.getAt(distance,name.lexeme);
+  }else{
+    return globals.get(name);
+  }
+}
 private void checkNumberOperand(Token operator, Object operand) {
 if (operand instanceof Double) return;
 throw new RuntimeError(operator, "Operand must be a number.");
@@ -89,8 +138,11 @@ private void execute(Stmt stmt) {
 stmt.accept(this);
 }
 
-void executeBlock(List<Stmt> statements,
-Environment environment) {
+void resolve(Expr expr,int depth){
+  locals.put(expr,depth);
+}
+
+void executeBlock(List<Stmt> statements,Environment environment) {
 Environment previous = this.environment;
 try {
 this.environment = environment;
@@ -109,9 +161,29 @@ return null;
 }
 
 @Override
+public Void visitClassStmt(Stmt.Class stmt){
+  environment.define(stmt.name.lexeme,null);
+  Map<String,TupalFunction> methods = new HashMap<>();
+  for(Stmt.Function method : stmt.methods){
+    TupalFunction function = new TupalFunction(method,environment);
+    methods.put(method.name.lexeme, function);
+  }
+  TupalClass klass = new TupalClass(stmt.name.lexeme, methods);
+  environment.assign(stmt.name, klass);
+  return null;
+}
+
+@Override
 public Void visitExpressionStmt(Stmt.Expression stmt) {
 evaluate(stmt.expression);
 return null;
+}
+
+@Override
+public Void visitFunctionStmt(Stmt.Function stmt){
+  TupalFunction function = new TupalFunction(stmt,environment);
+  environment.define(stmt.name.lexeme, function);
+  return null;
 }
 
 @Override
@@ -129,6 +201,14 @@ public Void visitPrintStmt(Stmt.Print stmt) {
 Object value = evaluate(stmt.expression);
 System.out.println(stringify(value));
 return null;
+}
+
+@Override
+public Void visitReturnStmt(Stmt.Return stmt){
+Object value = null;
+if(stmt.value != null) value = evaluate(stmt.value);
+
+throw new Return(value);
 }
 
 @Override
@@ -152,7 +232,13 @@ return null;
 @Override
 public Object visitAssignExpr(Expr.Assign expr) {
 Object value = evaluate(expr.value);
-environment.assign(expr.name, value);
+Integer distance = locals.get(expr);
+
+if(distance != null){
+  environment.assignAt(distance, expr.name,value);
+}else{
+  globals.assign(expr.name, value);
+}
 return value;
 }
 
@@ -196,6 +282,35 @@ case EQUAL_EQUAL: return isEqual(left, right);
 }
 // Unreachable.
 return null;
+}
+
+@Override
+public Object visitCallExpr(Expr.Call expr){
+  Object callee = evaluate(expr.callee);
+
+  List<Object> arguments = new ArrayList<>();
+  for(Expr argument : expr.arguments){
+  arguments.add(evaluate(argument));
+  }
+  if(!(callee instanceof TupalCallable)){
+    throw new RuntimeError(expr.paren, "Can only call functions and classes.");
+  }
+
+  TupalCallable function =  (TupalCallable) callee ;
+  if(function.arity() != arguments.size()){
+    throw new RuntimeError(expr.paren,"Expected " + function.arity() + " arguments got " +
+       arguments.size() +"." );
+  }
+  return function.call(this, arguments);
+}
+
+@Override
+public Object visitGetExpr(Expr.Get expr){
+  Object object = evaluate(expr.object);
+  if(object instanceof TupalInstance){
+    return ((TupalInstance) object).get(expr.name);
+  }
+  throw new RuntimeError(expr.name,"Only instances have properties");
 }
 
 void interpret(List<Stmt> statements) {

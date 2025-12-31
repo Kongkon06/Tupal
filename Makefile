@@ -6,15 +6,21 @@ BIN_DIR := bin
 MAIN_CLASS := com.niyor.tupal.Tupal
 
 SOURCES := $(SRC_DIR)/com/niyor/tupal/Token.java \
-		   $(SRC_DIR)/com/niyor/tupal/TokenType.java \
-		   $(SRC_DIR)/com/niyor/tupal/Tupal.java \
-		   $(SRC_DIR)/com/niyor/tupal/UnicodeToToken.java \
-           $(SRC_DIR)/com/niyor/tupal/Scanner.java \
+		  $(SRC_DIR)/com/niyor/tupal/TokenType.java \
            $(SRC_DIR)/com/niyor/tupal/RuntimeError.java \
+		   $(SRC_DIR)/com/niyor/tupal/UnicodeToToken.java \
+		   $(SRC_DIR)/com/niyor/tupal/Tupal.java \
+		   $(SRC_DIR)/com/niyor/tupal/Parser.java \
+           $(SRC_DIR)/com/niyor/tupal/Environment.java \
+           $(SRC_DIR)/com/niyor/tupal/Scanner.java \
            $(SRC_DIR)/com/niyor/tupal/Expr.java \
            $(SRC_DIR)/com/niyor/tupal/Stmt.java \
-           $(SRC_DIR)/com/niyor/tupal/Environment.java \
-           $(SRC_DIR)/com/niyor/tupal/Parser.java \
+           $(SRC_DIR)/com/niyor/tupal/TupalCallable.java \
+           $(SRC_DIR)/com/niyor/tupal/Return.java \
+           $(SRC_DIR)/com/niyor/tupal/TupalFunction.java \
+           $(SRC_DIR)/com/niyor/tupal/TupalClass.java \
+           $(SRC_DIR)/com/niyor/tupal/TupalInstance.java \
+           $(SRC_DIR)/com/niyor/tupal/Resolver.java \
            $(SRC_DIR)/com/niyor/tupal/Interpreter.java \
            # Add other .java files here manually
 

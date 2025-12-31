@@ -31,6 +31,7 @@ class Tupal{
   byte[] bytes = Files.readAllBytes(Paths.get(path));
   String file = new String(bytes, StandardCharsets.UTF_8);
   List<String> source = StringToUnicode(file);
+  System.out.println(source);
   run(source);
   if (hadError) System.exit(65);
   if (hadRuntimeError) System.exit(70);
@@ -66,33 +67,39 @@ private static List<String> StringToUnicode(String file) {
     StringBuilder word = new StringBuilder();
 
     for (char lexeme : file.toCharArray()) {
-        int code = (int) lexeme;
+        int code = lexeme;
         String hex = String.format("%04X", code);
 
-        // Handle special characters: ; \n { }
-        if (lexeme == ';' || lexeme == '\n' || lexeme == '(' || lexeme == ')' || lexeme == '{' || lexeme == '}') {
+        // All delimiters, including "
+        if (lexeme == ';' || lexeme == '\n' ||
+            lexeme == '(' || lexeme == ')' ||
+            lexeme == '{' || lexeme == '}' ||
+            lexeme == '"') {
+
             if (word.length() > 0) {
                 words.add(word.toString().trim());
                 word.setLength(0);
             }
-            words.add(hex); // add special character as separate item
-        } else if (lexeme == ' ') {
+            words.add(hex);
+        }
+        else if (lexeme == ' ') {
             if (word.length() > 0) {
                 words.add(word.toString().trim());
                 word.setLength(0);
             }
-        } else {
+        }
+        else {
             word.append(hex).append(" ");
         }
     }
 
-    // Add any remaining word
     if (word.length() > 0) {
         words.add(word.toString().trim());
     }
 
     return words;
 }
+
 
 static void error(int line, String message) {
 report(line, "", message);
