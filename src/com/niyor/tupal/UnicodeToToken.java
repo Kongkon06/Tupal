@@ -3,6 +3,7 @@ package com.niyor.tupal;
 import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.ArrayList;
 
 class UnicodeToToken {
     private static final Map<String, String> assameseNumber;
@@ -44,6 +45,44 @@ class UnicodeToToken {
     }
     return result.toString();
 }
+    public static List<String> StringToUnicode(String file) {
+    List<String> words = new ArrayList<>();
+    StringBuilder word = new StringBuilder();
+
+    for (char lexeme : file.toCharArray()) {
+        int code = lexeme;
+        String hex = String.format("%04X", code);
+
+        // All delimiters, including "
+        if (lexeme == ';' || lexeme == '\n' ||
+            lexeme == '(' || lexeme == ')' ||
+            lexeme == '{' || lexeme == '}' ||
+            lexeme == '"' || lexeme == ',' ||
+            lexeme == '.') {
+
+            if (word.length() > 0) {
+                words.add(word.toString().trim());
+                word.setLength(0);
+            }
+            words.add(hex);
+        }
+        else if (lexeme == ' ') {
+            if (word.length() > 0) {
+                words.add(word.toString().trim());
+                word.setLength(0);
+            }
+        }
+        else {
+            word.append(hex).append(" ");
+        }
+    }
+
+    if (word.length() > 0) {
+        words.add(word.toString().trim());
+    }
+
+    return words;
+    }
     public static String fromUnicodeHex(String hexInput) {
         String[] hexCodes = hexInput.trim().split("\\s+");
         StringBuilder result = new StringBuilder();
