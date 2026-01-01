@@ -30,6 +30,7 @@ private static final Map<String, TokenType> assameseKeyword;
         assameseKeyword.put("09B8 09A4 09CD 09AF", TRUE);
         assameseKeyword.put("099A 09B2 0995", VAR);
         assameseKeyword.put("0996 09BE 09A8 09CD 09A6 09BF", WHILE);
+        assameseKeyword.put("09AC 09BF 09B7 09DF",CLASS);
     }
 
 Scanner(List<String> source) {
