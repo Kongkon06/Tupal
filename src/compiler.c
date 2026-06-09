@@ -240,7 +240,6 @@ static void endScope() {
 
 static void expression();
 static void statement();
-static void importStatement();
 static void declaration();
 static ParseRule* getRule(TokenType type);
 static void parsePrecedence(Precedence precedence);
@@ -826,21 +825,6 @@ static void printStatement() {
   emitByte(OP_PRINT);
 }
 
-static void importStatement() {
-  consume(TOKEN_STRING, "Expect string path after 'import'.");
-
-  Token importTok = syntheticToken("import");
-  uint8_t importName = identifierConstant(&importTok);
-  emitBytes(OP_GET_GLOBAL, importName);
-
-  emitConstant(OBJ_VAL(copyString(parser.previous.start + 1,
-                                  parser.previous.length - 2)));
-
-  emitBytes(OP_CALL, 1);
-  emitByte(OP_POP);
-  consume(TOKEN_SEMICOLON, "Expect ';' after import.");
-}
-
 static void returnStatement() {
   if (current->type == TYPE_SCRIPT) {
     error("Can't return from top-level code.");
@@ -916,8 +900,6 @@ static void declaration() {
 static void statement() {
   if (match(TOKEN_PRINT)) {
     printStatement();
-  } else if (match(TOKEN_IMPORT)) {
-    importStatement();
   } else if (match(TOKEN_FOR)) {
     forStatement();
   } else if (match(TOKEN_IF)) {
@@ -935,8 +917,85 @@ static void statement() {
   }
 }
 
+static char* readFile(const char* path) {
+    FILE* file = fopen(path, "rb");
+    if (!file) return NULL;
+
+    fseek(file, 0, SEEK_END);
+    long size = ftell(file);
+    rewind(file);
+
+    char* buffer = malloc(size + 1);
+    fread(buffer, 1, size, file);
+    buffer[size] = '\0';
+
+    fclose(file);
+    return buffer;
+}
+
+char* preprocessImports(const char* source) {
+    size_t capacity = 1024;
+    char* output = malloc(capacity);
+    size_t outLen = 0;
+
+    const char* p = source;
+
+    while (*p) {
+
+        if (strncmp(p, "import \"", 8) == 0) {
+
+            p += 8;
+
+            char filename[256];
+            int len = 0;
+
+            while (*p && *p != '"') {
+                filename[len++] = *p++;
+            }
+
+            filename[len] = '\0';
+
+            if (*p == '"') p++;
+
+            while (*p && *p != ';') p++;
+            if (*p == ';') p++;
+
+            char* imported = readFile(filename);
+
+            if (imported) {
+
+                size_t importedLen = strlen(imported);
+
+                while (outLen + importedLen + 1 > capacity) {
+                    capacity *= 2;
+                    output = realloc(output, capacity);
+                }
+
+                memcpy(output + outLen, imported, importedLen);
+                outLen += importedLen;
+
+                free(imported);
+            }
+
+        } else {
+
+            if (outLen + 2 > capacity) {
+                capacity *= 2;
+                output = realloc(output, capacity);
+            }
+
+            output[outLen++] = *p++;
+        }
+    }
+
+    output[outLen] = '\0';
+    return output;
+}
+
 ObjFunction* compile(const char* source) {
-  initScanner(source);
+  char* expanded = preprocessImports(source);
+  initScanner(expanded);
+
   Compiler compiler;
   initCompiler(&compiler, TYPE_SCRIPT);
 
@@ -948,9 +1007,14 @@ ObjFunction* compile(const char* source) {
   while (!match(TOKEN_EOF)) {
     declaration();
   }
+
   ObjFunction* function = endCompiler();
+
+  free(expanded);
+
   return parser.hadError ? NULL : function;
 }
+
 void markCompilerRoots() {
   Compiler* compiler = current;
   while (compiler != NULL) {

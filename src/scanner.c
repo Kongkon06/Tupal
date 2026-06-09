@@ -27,7 +27,6 @@ static Keyword keywords[] = {
   {"যদি", TOKEN_IF},
   {"নাই", TOKEN_NIL},
   {"অথবা", TOKEN_OR},
-  {"import", TOKEN_IMPORT},
   {"প্ৰকাশ", TOKEN_PRINT},
   {"ল", TOKEN_RETURN},
   {"ডাংগৰিয়া", TOKEN_SUPER},

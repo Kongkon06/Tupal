@@ -7,5 +7,6 @@
 ObjFunction* compile(const char* source);
 
 void markCompilerRoots();
+char* preprocessImports(const char* source);
 
 #endif

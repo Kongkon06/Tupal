@@ -162,32 +162,6 @@ nanosleep(&ts, NULL);
   return NIL_VAL;
 }
 
-static Value importNative(int argCount, Value* args) {
-  if (argCount != 1 || !IS_STRING(args[0])) {
-    runtimeError("import expects a path string");
-    return NIL_VAL;
-  }
-  ObjString* path = AS_STRING(args[0]);
-  FILE* f = fopen(path->chars, "r");
-  if (f == NULL) {
-    runtimeError("Could not open file '%s'", path->chars);
-    return NIL_VAL;
-  }
-  fseek(f, 0, SEEK_END);
-  long len = ftell(f);
-  rewind(f);
-  char* buf = ALLOCATE(char, (int)len + 1);
-  size_t read = fread(buf, 1, (size_t)len, f);
-  buf[read] = '\0';
-  fclose(f);
-
-  InterpretResult res = interpret(buf);
-
-  FREE_ARRAY(char, buf, (int)len + 1);
-  (void)res; // ignore for now; errors will be printed by interpret
-  return NIL_VAL;
-}
-
 static Value listNative(int argCount, Value* args) {
   if (argCount != 0) {
     runtimeError("list() takes no arguments");
@@ -323,7 +297,6 @@ void initVM() {
   defineNative("file_read", fileReadNative);
   defineNative("file_write  ", fileWriteNative);
   defineNative("file_close", fileCloseNative);
-  defineNative("import", importNative);
   defineNative("list", listNative);
   defineNative("list_push", listPushNative);
   defineNative("list_get", listGetNative);
