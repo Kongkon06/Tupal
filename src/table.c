@@ -13,7 +13,7 @@ void initTable(Table* table) {
   table->capacity = 0;
   table->entries = NULL;
 }
-//> free-table
+
 void freeTable(Table* table) {
   FREE_ARRAY(Entry, table->entries, table->capacity);
   initTable(table);
@@ -30,19 +30,15 @@ static Entry* findEntry(Entry* entries, int capacity,
 
     if (entry->key == NULL) {
       if (IS_NIL(entry->value)) {
-        // Empty entry.
         return tombstone != NULL ? tombstone : entry;
       } else {
-        // We found a tombstone.
         if (tombstone == NULL) tombstone = entry;
       }
     } else if (entry->key == key) {
-      // We found the key.
       return entry;
     }
 
     index = (index + 1) & (capacity - 1);
-//< Optimization next-index
   }
 }
 
@@ -62,7 +58,6 @@ static void adjustCapacity(Table* table, int capacity) {
     entries[i].key = NULL;
     entries[i].value = NIL_VAL;
   }
-//> re-hash
 
   table->count = 0;
   for (int i = 0; i < table->capacity; i++) {
@@ -75,7 +70,6 @@ static void adjustCapacity(Table* table, int capacity) {
     table->count++;
   }
 
-
   FREE_ARRAY(Entry, table->entries, table->capacity);
 
   table->entries = entries;
@@ -87,7 +81,6 @@ bool tableSet(Table* table, ObjString* key, Value value) {
     int capacity = GROW_CAPACITY(table->capacity);
     adjustCapacity(table, capacity);
   }
-
 
   Entry* entry = findEntry(table->entries, table->capacity, key);
   bool isNewKey = entry->key == NULL;
@@ -102,10 +95,8 @@ bool tableSet(Table* table, ObjString* key, Value value) {
 bool tableDelete(Table* table, ObjString* key) {
   if (table->count == 0) return false;
 
-  
   Entry* entry = findEntry(table->entries, table->capacity, key);
   if (entry->key == NULL) return false;
-
 
   entry->key = NULL;
   entry->value = BOOL_VAL(true);

@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 199309L
+
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -14,11 +16,12 @@
 #include "vm.h"
 
 VM vm; // [one]
+VM vm;
 static void runtimeError(const char* format, ...);
 static Value clockNative(int argCount, Value* args) {
   return NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
 }
-// Map natives
+
 static Value mapNewNative(int argCount, Value* args) {
   return OBJ_VAL(newMap());
 }
@@ -51,6 +54,7 @@ static Value mapGetNative(int argCount, Value* args) {
   if (tableGet(&map->entries, key, &out)) return out;
   return NIL_VAL;
 }
+
 static Value mapDeleteNative(int argCount, Value* args) {
   if (argCount != 2) {
     runtimeError("map_delete expects 2 arguments (map, key)");
@@ -64,6 +68,7 @@ static Value mapDeleteNative(int argCount, Value* args) {
   ObjString* key = AS_STRING(args[1]);
   return BOOL_VAL(tableDelete(&map->entries, key));
 }
+
 static Value mapHasNative(int argCount, Value* args) {
   if (argCount != 2) {
     runtimeError("map_has expects 2 arguments (map, key)");
@@ -79,7 +84,6 @@ static Value mapHasNative(int argCount, Value* args) {
   return BOOL_VAL(tableGet(&map->entries, key, &out));
 }
 
-// File natives
 static Value openNative(int argCount, Value* args) {
   if (argCount < 1 || !IS_STRING(args[0])) {
     runtimeError("open expects at least a path string");
@@ -148,10 +152,11 @@ static Value sleepNative(int argCount, Value* args) {
 #ifdef _WIN32
   Sleep((unsigned long)(seconds * 1000));
 #else
-  struct timespec ts;
-  ts.tv_sec = (time_t)seconds;
-  ts.tv_nsec = (long)((seconds - ts.tv_sec) * 1e9);
-  nanosleep(&ts, NULL);
+ struct timespec ts;
+ts.tv_sec = (time_t)seconds;
+ts.tv_nsec = (long)((seconds - ts.tv_sec) * 1000000000L);
+
+nanosleep(&ts, NULL);
 #endif
 
   return NIL_VAL;
@@ -183,7 +188,6 @@ static Value importNative(int argCount, Value* args) {
   return NIL_VAL;
 }
 
-// List/Array natives
 static Value listNative(int argCount, Value* args) {
   if (argCount != 0) {
     runtimeError("list() takes no arguments");
@@ -259,10 +263,8 @@ static Value listLengthNative(int argCount, Value* args) {
 }
 static void resetStack() {
   vm.stackTop = vm.stack;
-//> Calls and Functions reset-frame-count
   vm.frameCount = 0;
   vm.openUpvalues = NULL;
-//< Closures init-open-upvalues
 }
 static void runtimeError(const char* format, ...) {
   va_list args;
@@ -274,10 +276,9 @@ static void runtimeError(const char* format, ...) {
   for (int i = vm.frameCount - 1; i >= 0; i--) {
     CallFrame* frame = &vm.frames[i];
     ObjFunction* function = frame->closure->function;
-//< Closures runtime-error-function
-    size_t instruction = frame->ip - function->chunk.code - 1;
-    fprintf(stderr, "[line %d] in ", // [minus]
-            function->chunk.lines[instruction]);
+  size_t instruction = frame->ip - function->chunk.code - 1;
+  fprintf(stderr, "[line %d] in ",
+      function->chunk.lines[instruction]);
     if (function->name == NULL) {
       fprintf(stderr, "script\n");
     } else {
@@ -285,7 +286,6 @@ static void runtimeError(const char* format, ...) {
     }
   }
 
-//< Calls and Functions runtime-error-stack
   resetStack();
 }
 static void defineNative(const char* name, NativeFn function) {
@@ -307,14 +307,10 @@ void initVM() {
   vm.grayStack = NULL;
 
   initTable(&vm.globals);
-//< Global Variables init-globals
-//> Hash Tables init-strings
   initTable(&vm.strings);
 
   vm.initString = NULL;
-//< null-init-string
   vm.initString = copyString("init", 4);
-
 
   defineNative("ঘড়ী", clockNative);
   defineNative("map", mapNewNative);
@@ -343,19 +339,14 @@ void freeVM() {
   vm.initString = NULL;
   freeObjects();
 }
-//> push
 void push(Value value) {
   *vm.stackTop = value;
   vm.stackTop++;
 }
-//< push
-//> pop
 Value pop() {
   vm.stackTop--;
   return *vm.stackTop;
 }
-//< pop
-//> Types of Values peek
 static Value peek(int distance) {
   return vm.stackTop[-1 - distance];
 }
@@ -373,46 +364,33 @@ static bool call(ObjClosure* closure, int argCount) {
     return false;
   }
 
-//< check-overflow
   CallFrame* frame = &vm.frames[vm.frameCount++];
 
   frame->closure = closure;
   frame->ip = closure->function->chunk.code;
-//< Closures call-init-closure
   frame->slots = vm.stackTop - argCount - 1;
   return true;
 }
-//< Calls and Functions call
-//> Calls and Functions call-value
 static bool callValue(Value callee, int argCount) {
   if (IS_OBJ(callee)) {
     switch (OBJ_TYPE(callee)) {
-//> Methods and Initializers call-bound-method
       case OBJ_BOUND_METHOD: {
         ObjBoundMethod* bound = AS_BOUND_METHOD(callee);
-//> store-receiver
         vm.stackTop[-argCount - 1] = bound->receiver;
-//< store-receiver
         return call(bound->method, argCount);
       }
-//< Methods and Initializers call-bound-method
-//> Classes and Instances call-class
       case OBJ_CLASS: {
         ObjClass* klass = AS_CLASS(callee);
         vm.stackTop[-argCount - 1] = OBJ_VAL(newInstance(klass));
-//> Methods and Initializers call-init
         Value initializer;
         if (tableGet(&klass->methods, vm.initString,
                      &initializer)) {
           return call(AS_CLOSURE(initializer), argCount);
-//> no-init-arity-error
         } else if (argCount != 0) {
           runtimeError("Expected 0 arguments but got %d.",
                        argCount);
           return false;
-//< no-init-arity-error
         }
-//< Methods and Initializers call-init
         return true;
       }
       case OBJ_CLOSURE:
@@ -425,7 +403,6 @@ static bool callValue(Value callee, int argCount) {
         push(result);
         return true;
       }
-//< call-native
       default:
         break; // Non-callable object type.
     }
@@ -433,8 +410,6 @@ static bool callValue(Value callee, int argCount) {
   runtimeError("Can only call functions and classes.");
   return false;
 }
-//< Calls and Functions call-value
-//> Methods and Initializers invoke-from-class
 static bool invokeFromClass(ObjClass* klass, ObjString* name,
                             int argCount) {
   Value method;
@@ -444,20 +419,15 @@ static bool invokeFromClass(ObjClass* klass, ObjString* name,
   }
   return call(AS_CLOSURE(method), argCount);
 }
-//< Methods and Initializers invoke-from-class
-//> Methods and Initializers invoke
 static bool invoke(ObjString* name, int argCount) {
   Value receiver = peek(argCount);
-//> invoke-check-type
 
   if (!IS_INSTANCE(receiver)) {
     runtimeError("Only instances have methods.");
     return false;
   }
 
-//< invoke-check-type
   ObjInstance* instance = AS_INSTANCE(receiver);
-//> invoke-field
 
   Value value;
   if (tableGet(&instance->fields, name, &value)) {
@@ -465,11 +435,8 @@ static bool invoke(ObjString* name, int argCount) {
     return callValue(value, argCount);
   }
 
-//< invoke-field
   return invokeFromClass(instance->klass, name, argCount);
 }
-//< Methods and Initializers invoke
-//> Methods and Initializers bind-method
 static bool bindMethod(ObjClass* klass, ObjString* name) {
   Value method;
   if (!tableGet(&klass->methods, name, &method)) {
@@ -483,10 +450,7 @@ static bool bindMethod(ObjClass* klass, ObjString* name) {
   push(OBJ_VAL(bound));
   return true;
 }
-//< Methods and Initializers bind-method
-//> Closures capture-upvalue
 static ObjUpvalue* captureUpvalue(Value* local) {
-//> look-for-existing-upvalue
   ObjUpvalue* prevUpvalue = NULL;
   ObjUpvalue* upvalue = vm.openUpvalues;
   while (upvalue != NULL && upvalue->location > local) {
@@ -498,9 +462,7 @@ static ObjUpvalue* captureUpvalue(Value* local) {
     return upvalue;
   }
 
-//< look-for-existing-upvalue
   ObjUpvalue* createdUpvalue = newUpvalue(local);
-//> insert-upvalue-in-list
   createdUpvalue->next = upvalue;
 
   if (prevUpvalue == NULL) {
@@ -509,11 +471,8 @@ static ObjUpvalue* captureUpvalue(Value* local) {
     prevUpvalue->next = createdUpvalue;
   }
 
-//< insert-upvalue-in-list
   return createdUpvalue;
 }
-//< Closures capture-upvalue
-//> Closures close-upvalues
 static void closeUpvalues(Value* last) {
   while (vm.openUpvalues != NULL &&
          vm.openUpvalues->location >= last) {
@@ -523,8 +482,6 @@ static void closeUpvalues(Value* last) {
     vm.openUpvalues = upvalue->next;
   }
 }
-//< Closures close-upvalues
-//> Methods and Initializers define-method
 static void defineMethod(ObjString* name) {
   Value method = peek(0);
   ObjClass* klass = AS_CLASS(peek(1));
@@ -535,13 +492,10 @@ static void defineMethod(ObjString* name) {
 static bool isFalsey(Value value) {
   return IS_NIL(value) || (IS_BOOL(value) && !AS_BOOL(value));
 }
-//< Types of Values is-falsey
-//> Strings concatenate
 static void concatenate() {
 
   ObjString* b = AS_STRING(peek(0));
   ObjString* a = AS_STRING(peek(1));
-//< Garbage Collection concatenate-peek
 
   int length = a->length + b->length;
   char* chars = ALLOCATE(char, length + 1);
@@ -550,16 +504,11 @@ static void concatenate() {
   chars[length] = '\0';
 
   ObjString* result = takeString(chars, length);
-//> Garbage Collection concatenate-pop
   pop();
   pop();
-//< Garbage Collection concatenate-pop
   push(OBJ_VAL(result));
 }
-//< Strings concatenate
-//> run
 static InterpretResult run() {
-//> Calls and Functions run
   CallFrame* frame = &vm.frames[vm.frameCount - 1];
 
 #define READ_BYTE() (*frame->ip++)
@@ -583,10 +532,8 @@ static InterpretResult run() {
       double a = AS_NUMBER(pop()); \
       push(valueType(a op b)); \
     } while (false)
-//< Types of Values binary-op
 
   for (;;) {
-//> trace-execution
 #ifdef DEBUG_TRACE_EXECUTION
 //> trace-stack
     printf("          ");
@@ -664,7 +611,6 @@ static InterpretResult run() {
           return INTERPRET_RUNTIME_ERROR;
         }
 
-//< get-not-instance
         ObjInstance* instance = AS_INSTANCE(peek(0));
         ObjString* name = READ_STRING();
         
@@ -680,7 +626,6 @@ static InterpretResult run() {
         break;
       }
       case OP_SET_PROPERTY: {
-//> set-not-instance
         if (!IS_INSTANCE(peek(1))) {
           runtimeError("Only instances have fields.");
           return INTERPRET_RUNTIME_ERROR;
@@ -725,18 +670,12 @@ static InterpretResult run() {
         }
         break;
       }
-//< Strings add-strings
-//> Types of Values op-arithmetic
       case OP_SUBTRACT: BINARY_OP(NUMBER_VAL, -); break;
       case OP_MULTIPLY: BINARY_OP(NUMBER_VAL, *); break;
       case OP_DIVIDE:   BINARY_OP(NUMBER_VAL, /); break;
-//< Types of Values op-arithmetic
-//> Types of Values op-not
       case OP_NOT:
         push(BOOL_VAL(isFalsey(pop())));
         break;
-//< Types of Values op-not
-//> Types of Values op-negate
       case OP_NEGATE:
         if (!IS_NUMBER(peek(0))) {
           runtimeError("Operand must be a number.");
@@ -744,27 +683,17 @@ static InterpretResult run() {
         }
         push(NUMBER_VAL(-AS_NUMBER(pop())));
         break;
-//< Types of Values op-negate
-//> Global Variables interpret-print
       case OP_PRINT: {
         printValue(pop());
         printf("\n");
         break;
       }
-//< Global Variables interpret-print
-//> Jumping Back and Forth op-jump
       case OP_JUMP: {
         uint16_t offset = READ_SHORT();
-/* Jumping Back and Forth op-jump < Calls and Functions jump
-        vm.ip += offset;
-*/
-//> Calls and Functions jump
+
         frame->ip += offset;
-//< Calls and Functions jump
         break;
       }
-//< Jumping Back and Forth op-jump
-//> Jumping Back and Forth op-jump-if-false
       case OP_JUMP_IF_FALSE: {
         uint16_t offset = READ_SHORT();
 

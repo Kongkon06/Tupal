@@ -213,10 +213,8 @@ static ObjFunction* endCompiler() {
 
 #ifdef DEBUG_PRINT_CODE
   if (!parser.hadError) {
-//> Calls and Functions disassemble-end
     disassembleChunk(currentChunk(), function->name != NULL
         ? function->name->chars : "<script>");
-//< Calls and Functions disassemble-end
   }
 #endif
   current = current->enclosing;
@@ -236,10 +234,8 @@ static void endScope() {
     } else {
       emitByte(OP_POP);
     }
-//< Closures end-scope
     current->localCount--;
   }
-//< pop-locals
 }
 
 static void expression();
@@ -318,14 +314,12 @@ static void addLocal(Token name) {
   local->depth = -1;
 
   local->isCaptured = false;
-//< Closures init-is-captured
 }
 
 static void declareVariable() {
   if (current->scopeDepth == 0) return;
 
   Token* name = &parser.previous;
-//> existing-in-scope
   for (int i = current->localCount - 1; i >= 0; i--) {
     Local* local = &current->locals[i];
     if (local->depth != -1 && local->depth < current->scopeDepth) {
@@ -346,27 +340,21 @@ static uint8_t parseVariable(const char* errorMessage) {
   declareVariable();
   if (current->scopeDepth > 0) return 0;
 
-//< Local Variables parse-local
   return identifierConstant(&parser.previous);
 }
 
 static void markInitialized() {
-//> Calls and Functions check-depth
   if (current->scopeDepth == 0) return;
-//< Calls and Functions check-depth
   current->locals[current->localCount - 1].depth =
       current->scopeDepth;
 }
 
 static void defineVariable(uint8_t global) {
   if (current->scopeDepth > 0) {
-//> define-local
     markInitialized();
-//< define-local
     return;
   }
 
-//< Local Variables define-variable
   emitBytes(OP_DEFINE_GLOBAL, global);
 }
 static uint8_t argumentList() {
@@ -374,11 +362,9 @@ static uint8_t argumentList() {
   if (!check(TOKEN_RIGHT_PAREN)) {
     do {
       expression();
-//> arg-limit
       if (argCount == 255) {
         error("Can't have more than 255 arguments.");
       }
-//< arg-limit
       argCount++;
     } while (match(TOKEN_COMMA));
   }
@@ -396,20 +382,17 @@ static void and_(bool canAssign) {
 }
 
 static void binary(bool canAssign) {
-//< Global Variables binary
   TokenType operatorType = parser.previous.type;
   ParseRule* rule = getRule(operatorType);
   parsePrecedence((Precedence)(rule->precedence + 1));
 
   switch (operatorType) {
-//> Types of Values comparison-operators
     case TOKEN_BANG_EQUAL:    emitBytes(OP_EQUAL, OP_NOT); break;
     case TOKEN_EQUAL_EQUAL:   emitByte(OP_EQUAL); break;
     case TOKEN_GREATER:       emitByte(OP_GREATER); break;
     case TOKEN_GREATER_EQUAL: emitBytes(OP_LESS, OP_NOT); break;
     case TOKEN_LESS:          emitByte(OP_LESS); break;
     case TOKEN_LESS_EQUAL:    emitBytes(OP_GREATER, OP_NOT); break;
-//< Types of Values comparison-operators
     case TOKEN_PLUS:          emitByte(OP_ADD); break;
     case TOKEN_MINUS:         emitByte(OP_SUBTRACT); break;
     case TOKEN_STAR:          emitByte(OP_MULTIPLY); break;
@@ -430,19 +413,16 @@ static void dot(bool canAssign) {
   if (canAssign && match(TOKEN_EQUAL)) {
     expression();
     emitBytes(OP_SET_PROPERTY, name);
-//> Methods and Initializers parse-call
   } else if (match(TOKEN_LEFT_PAREN)) {
     uint8_t argCount = argumentList();
     emitBytes(OP_INVOKE, name);
     emitByte(argCount);
-//< Methods and Initializers parse-call
   } else {
     emitBytes(OP_GET_PROPERTY, name);
   }
 }
 
 static void literal(bool canAssign) {
-//< Global Variables parse-literal
   switch (parser.previous.type) {
     case TOKEN_FALSE: emitByte(OP_FALSE); break;
     case TOKEN_NIL: emitByte(OP_NIL); break;
@@ -452,17 +432,14 @@ static void literal(bool canAssign) {
 }
 
 static void grouping(bool canAssign) {
-//< Global Variables grouping
   expression();
   consume(TOKEN_RIGHT_PAREN, "Expect ')' after expression.");
 }
 
 static void number(bool canAssign) {
-//< Global Variables number
   double value = strtod(parser.previous.start, NULL);
 
   emitConstant(NUMBER_VAL(value));
-//< Types of Values const-number-val
 }
 
 static void or_(bool canAssign) {
@@ -477,7 +454,6 @@ static void or_(bool canAssign) {
 }
 
 static void string(bool canAssign) {
-//< Global Variables string
   emitConstant(OBJ_VAL(copyString(parser.previous.start + 1,
                                   parser.previous.length - 2)));
 }
@@ -489,28 +465,22 @@ static void namedVariable(Token name, bool canAssign) {
   if (arg != -1) {
     getOp = OP_GET_LOCAL;
     setOp = OP_SET_LOCAL;
-//> Closures named-variable-upvalue
   } else if ((arg = resolveUpvalue(current, &name)) != -1) {
     getOp = OP_GET_UPVALUE;
     setOp = OP_SET_UPVALUE;
-//< Closures named-variable-upvalue
   } else {
     arg = identifierConstant(&name);
     getOp = OP_GET_GLOBAL;
     setOp = OP_SET_GLOBAL;
   }
   if (canAssign && match(TOKEN_EQUAL)) {
-//< named-variable-can-assign
     expression();
 
     emitBytes(setOp, (uint8_t)arg);
-//< Local Variables emit-set
   } else {
 
     emitBytes(getOp, (uint8_t)arg);
-//< Local Variables emit-get
   }
-//< named-variable
 }
 
 static void variable(bool canAssign) {
@@ -525,18 +495,15 @@ static Token syntheticToken(const char* text) {
 }
 
 static void super_(bool canAssign) {
-//> super-errors
   if (currentClass == NULL) {
     error("Can't use 'super' outside of a class.");
   } else if (!currentClass->hasSuperclass) {
     error("Can't use 'super' in a class with no superclass.");
   }
 
-//< super-errors
   consume(TOKEN_DOT, "Expect '.' after 'super'.");
   consume(TOKEN_IDENTIFIER, "Expect superclass method name.");
   uint8_t name = identifierConstant(&parser.previous);
-//> super-get
   
   namedVariable(syntheticToken("this"), false);
 
@@ -552,26 +519,21 @@ static void super_(bool canAssign) {
 }
 
 static void this_(bool canAssign) {
-//> this-outside-class
   if (currentClass == NULL) {
     error("Can't use 'this' outside of a class.");
     return;
   }
   
-//< this-outside-class
   variable(false);
 } // [this]
 
 static void unary(bool canAssign) {
-//< Global Variables unary
   TokenType operatorType = parser.previous.type;
 
   parsePrecedence(PREC_UNARY);
 
   switch (operatorType) {
-//> Types of Values compile-not
     case TOKEN_BANG: emitByte(OP_NOT); break;
-//< Types of Values compile-not
     case TOKEN_MINUS: emitByte(OP_NEGATE); break;
     default: return; // Unreachable.
   }
@@ -580,14 +542,12 @@ static void unary(bool canAssign) {
 ParseRule rules[] = {
 
   [TOKEN_LEFT_PAREN]    = {grouping, call,   PREC_CALL},
-//< Calls and Functions infix-left-paren
   [TOKEN_RIGHT_PAREN]   = {NULL,     NULL,   PREC_NONE},
   [TOKEN_LEFT_BRACE]    = {NULL,     NULL,   PREC_NONE}, // [big]
   [TOKEN_RIGHT_BRACE]   = {NULL,     NULL,   PREC_NONE},
   [TOKEN_COMMA]         = {NULL,     NULL,   PREC_NONE},
 
   [TOKEN_DOT]           = {NULL,     dot,    PREC_CALL},
-//< Classes and Instances table-dot
   [TOKEN_MINUS]         = {unary,    binary, PREC_TERM},
   [TOKEN_PLUS]          = {NULL,     binary, PREC_TERM},
   [TOKEN_SEMICOLON]     = {NULL,     NULL,   PREC_NONE},
@@ -597,7 +557,6 @@ ParseRule rules[] = {
   [TOKEN_BANG]          = {unary,    NULL,   PREC_NONE},
 
   [TOKEN_BANG_EQUAL]    = {NULL,     binary, PREC_EQUALITY},
-//< Types of Values table-equal
   [TOKEN_EQUAL]         = {NULL,     NULL,   PREC_NONE},
 
   [TOKEN_EQUAL_EQUAL]   = {NULL,     binary, PREC_EQUALITY},
@@ -608,9 +567,7 @@ ParseRule rules[] = {
 
   [TOKEN_IDENTIFIER]    = {variable, NULL,   PREC_NONE},
 
-//> Strings table-string
   [TOKEN_STRING]        = {string,   NULL,   PREC_NONE},
-//< Strings table-string
   [TOKEN_NUMBER]        = {number,   NULL,   PREC_NONE},
 
   [TOKEN_AND]           = {NULL,     and_,   PREC_AND},
@@ -625,7 +582,6 @@ ParseRule rules[] = {
   [TOKEN_NIL]           = {literal,  NULL,   PREC_NONE},
 
   [TOKEN_OR]            = {NULL,     or_,    PREC_OR},
-//< Jumping Back and Forth table-or
   [TOKEN_PRINT]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_RETURN]        = {NULL,     NULL,   PREC_NONE},
 
@@ -634,7 +590,6 @@ ParseRule rules[] = {
   [TOKEN_THIS]          = {this_,    NULL,   PREC_NONE},
 
   [TOKEN_TRUE]          = {literal,  NULL,   PREC_NONE},
-//< Types of Values table-true
   [TOKEN_VAR]           = {NULL,     NULL,   PREC_NONE},
   [TOKEN_WHILE]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_ERROR]         = {NULL,     NULL,   PREC_NONE},
@@ -688,7 +643,6 @@ static void function(FunctionType type) {
   beginScope(); // [no-end-scope]
 
   consume(TOKEN_LEFT_PAREN, "Expect '(' after function name.");
-//> parameters
   if (!check(TOKEN_RIGHT_PAREN)) {
     do {
       current->function->arity++;
@@ -699,7 +653,6 @@ static void function(FunctionType type) {
       defineVariable(constant);
     } while (match(TOKEN_COMMA));
   }
-//< parameters
   consume(TOKEN_RIGHT_PAREN, "Expect ')' after parameters.");
   consume(TOKEN_LEFT_BRACE, "Expect '{' before function body.");
   block();
@@ -727,15 +680,12 @@ static void method() {
   }
   
   function(type);
-//< method-body
   emitBytes(OP_METHOD, constant);
 }
 
 static void classDeclaration() {
   consume(TOKEN_IDENTIFIER, "Expect class name.");
-//> Methods and Initializers class-name
   Token className = parser.previous;
-//< Methods and Initializers class-name
   uint8_t nameConstant = identifierConstant(&parser.previous);
   declareVariable();
 
@@ -751,14 +701,11 @@ static void classDeclaration() {
   if (match(TOKEN_LESS)) {
     consume(TOKEN_IDENTIFIER, "Expect superclass name.");
     variable(false);
-//> inherit-self
 
     if (identifiersEqual(&className, &parser.previous)) {
       error("A class can't inherit from itself.");
     }
 
-//< inherit-self
-//> superclass-variable
     beginScope();
     addLocal(syntheticToken("super"));
     defineVariable(0);
@@ -811,12 +758,10 @@ static void expressionStatement() {
 }
 
 static void forStatement() {
-//> for-begin-scope
   beginScope();
   consume(TOKEN_LEFT_PAREN, "Expect '(' after 'for'.");
 
   if (match(TOKEN_SEMICOLON)) {
-    // No initializer.
   } else if (match(TOKEN_VAR)) {
     varDeclaration();
   } else {
@@ -863,12 +808,9 @@ static void ifStatement() {
   consume(TOKEN_RIGHT_PAREN, "Expect ')' after condition."); // [paren]
 
   int thenJump = emitJump(OP_JUMP_IF_FALSE);
-//> pop-then
   emitByte(OP_POP);
-//< pop-then
   statement();
 
-//> jump-over-else
   int elseJump = emitJump(OP_JUMP);
 
   patchJump(thenJump);
@@ -885,16 +827,12 @@ static void printStatement() {
 }
 
 static void importStatement() {
-  // Expect a string literal path: import "path/to/file.lox";
   consume(TOKEN_STRING, "Expect string path after 'import'.");
 
-  // Emit the global import function first (callee), then the path constant,
-  // then call it with 1 argument and pop the returned value.
   Token importTok = syntheticToken("import");
   uint8_t importName = identifierConstant(&importTok);
   emitBytes(OP_GET_GLOBAL, importName);
 
-  // The parser.previous now holds the string token we consumed; emit it.
   emitConstant(OBJ_VAL(copyString(parser.previous.start + 1,
                                   parser.previous.length - 2)));
 
@@ -904,7 +842,6 @@ static void importStatement() {
 }
 
 static void returnStatement() {
-//> return-from-script
   if (current->type == TYPE_SCRIPT) {
     error("Can't return from top-level code.");
   }
@@ -923,9 +860,7 @@ static void returnStatement() {
 }
 
 static void whileStatement() {
-//> loop-start
   int loopStart = currentChunk()->count;
-//< loop-start
   consume(TOKEN_LEFT_PAREN, "Expect '(' after 'while'.");
   expression();
   consume(TOKEN_RIGHT_PAREN, "Expect ')' after condition.");
@@ -933,9 +868,7 @@ static void whileStatement() {
   int exitJump = emitJump(OP_JUMP_IF_FALSE);
   emitByte(OP_POP);
   statement();
-//> loop
   emitLoop(loopStart);
-//< loop
 
   patchJump(exitJump);
   emitByte(OP_POP);

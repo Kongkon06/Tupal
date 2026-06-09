@@ -1,38 +1,68 @@
+# Makefile for clox interpreter (Embarcadero compatible)
 
-# Makefile (Linux friendly)
+CFLAGS = -Wall -Wextra -std=c99 -g -Wno-unused-parameter -I$(SRCDIR)
+CFLAGS_RELEASE = -Wall -Wextra -std=c99 -O2 -I$(SRCDIR)
 
-SRC_DIR := src
-BIN_DIR := bin
-MAIN_CLASS := com.niyor.tupal.Tupal
+TARGET = tupal
+OBJDIR = build
+SRCDIR = src
 
-SOURCES := $(SRC_DIR)/com/niyor/tupal/Token.java \
-		  $(SRC_DIR)/com/niyor/tupal/TokenType.java \
-           $(SRC_DIR)/com/niyor/tupal/RuntimeError.java \
-		   $(SRC_DIR)/com/niyor/tupal/UnicodeToToken.java \
-		   $(SRC_DIR)/com/niyor/tupal/Tupal.java \
-		   $(SRC_DIR)/com/niyor/tupal/Parser.java \
-           $(SRC_DIR)/com/niyor/tupal/Environment.java \
-           $(SRC_DIR)/com/niyor/tupal/Scanner.java \
-           $(SRC_DIR)/com/niyor/tupal/Expr.java \
-           $(SRC_DIR)/com/niyor/tupal/Stmt.java \
-           $(SRC_DIR)/com/niyor/tupal/TupalCallable.java \
-           $(SRC_DIR)/com/niyor/tupal/Return.java \
-           $(SRC_DIR)/com/niyor/tupal/TupalFunction.java \
-           $(SRC_DIR)/com/niyor/tupal/TupalClass.java \
-           $(SRC_DIR)/com/niyor/tupal/TupalInstance.java \
-           $(SRC_DIR)/com/niyor/tupal/Resolver.java \
-           $(SRC_DIR)/com/niyor/tupal/Interpreter.java \
-           # Add other .java files here manually
+SOURCES = $(SRCDIR)/main.c \
+          $(SRCDIR)/vm.c \
+          $(SRCDIR)/compiler.c \
+          $(SRCDIR)/scanner.c \
+          $(SRCDIR)/memory.c \
+          $(SRCDIR)/object.c \
+          $(SRCDIR)/table.c \
+          $(SRCDIR)/value.c \
+          $(SRCDIR)/chunk.c \
+          $(SRCDIR)/debug.c
 
-all: compile
 
-compile:
-	@mkdir -p $(BIN_DIR)
-	javac -d $(BIN_DIR) $(SOURCES)
+HEADERS = \
+    $(SRCDIR)/common.h \
+    $(SRCDIR)/chunk.h \
+    $(SRCDIR)/debug.h \
+    $(SRCDIR)/vm.h \
+    $(SRCDIR)/compiler.h \
+    $(SRCDIR)/scanner.h \
+    $(SRCDIR)/memory.h \
+    $(SRCDIR)/object.h \
+    $(SRCDIR)/table.h \
+    $(SRCDIR)/value.h
 
-run: compile
-	java -cp $(BIN_DIR) $(MAIN_CLASS) $(file)
+OBJECTS = $(patsubst $(SRCDIR)/%.c,$(OBJDIR)/%.o,$(SOURCES))
 
+
+# Default target
+all: $(OBJDIR) $(TARGET)
+
+# Create build folder (POSIX)
+$(OBJDIR):
+	mkdir -p $(OBJDIR)
+
+# Link
+$(TARGET): $(OBJECTS)
+	$(CC) $(CFLAGS) -o $@ $(OBJECTS) $(LDFLAGS)
+
+$(OBJDIR)/%.o: $(SRCDIR)/%.c $(HEADERS)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Release
+release: CFLAGS = $(CFLAGS_RELEASE)
+release: clean $(TARGET)
+
+# Debug
+debug: CFLAGS = $(CFLAGS) -DDEBUG
+debug: clean $(TARGET)
+
+# Run
+run: $(TARGET)
+	./$(TARGET)
+
+# Clean
 clean:
-	rm -rf $(BIN_DIR)
+	rm -f $(OBJDIR)/*.o
 
+distclean: clean
+	rm -f $(TARGET)

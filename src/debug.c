@@ -11,7 +11,6 @@ void disassembleChunk(Chunk* chunk, const char* name) {
     offset = disassembleInstruction(chunk, offset);
   }
 }
-//> constant-instruction
 static int constantInstruction(const char* name, Chunk* chunk,
                                int offset) {
   uint8_t constant = chunk->code[offset + 1];
@@ -49,14 +48,12 @@ static int jumpInstruction(const char* name, int sign,
 }
 int disassembleInstruction(Chunk* chunk, int offset) {
   printf("%04d ", offset);
-//> show-location
   if (offset > 0 &&
       chunk->lines[offset] == chunk->lines[offset - 1]) {
     printf("   | ");
   } else {
     printf("%4d ", chunk->lines[offset]);
   }
-//< show-location
   
   uint8_t instruction = chunk->code[offset];
   switch (instruction) {
@@ -129,7 +126,6 @@ int disassembleInstruction(Chunk* chunk, int offset) {
       printf("%-16s %4d ", "OP_CLOSURE", constant);
       printValue(chunk->constants.values[constant]);
       printf("\n");
-//> disassemble-upvalues
 
       ObjFunction* function = AS_FUNCTION(
           chunk->constants.values[constant]);
@@ -157,4 +153,3 @@ int disassembleInstruction(Chunk* chunk, int offset) {
       return offset + 1;
   }
 }
-//< disassemble-instruction
