@@ -11,6 +11,12 @@ void disassembleChunk(Chunk* chunk, const char* name) {
     offset = disassembleInstruction(chunk, offset);
   }
 }
+static int countInstruction(const char* name,Chunk* chunk,int offset) {
+    uint8_t count = chunk->code[offset + 1];
+    printf("%-16s %4d\n", name, count);
+    return offset + 2;
+}
+
 static int constantInstruction(const char* name, Chunk* chunk,
                                int offset) {
   uint8_t constant = chunk->code[offset + 1];
@@ -140,8 +146,14 @@ int disassembleInstruction(Chunk* chunk, int offset) {
     }
     case OP_CLOSE_UPVALUE:
       return simpleInstruction("OP_CLOSE_UPVALUE", offset);
-    case OP_RETURN:
-      return simpleInstruction("OP_RETURN", offset);
+    case OP_LIST:
+      return countInstruction("OP_LIST", chunk, offset);
+    case OP_RETURN:{
+      simpleInstruction("OP_RETURN", offset);
+      printValue(chunk->constants.values[chunk->code[offset + 1]]);
+      printValue(chunk->constants.values[chunk->code[offset + 1]]);
+      return offset + 1;
+    }
     case OP_CLASS:
       return constantInstruction("OP_CLASS", chunk, offset);
     case OP_INHERIT:

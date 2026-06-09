@@ -1,3 +1,35 @@
-In isAplha delete the loop when are only going to check is the first hexcode does represent a aplhjabatical character or not. if yes then return true
-
-filter semicolon while converting to unicode 
+Matched List token
+Parsed number: 1.000000
+Parsed number: 2.000000
+Parsed number: 3.000000
+Count of list elements: 3
+== <script> ==
+0000    1 OP_CONSTANT         1 '1'
+0002    | OP_CONSTANT         2 '2'
+0004    | OP_CONSTANT         3 '3'
+0006    | OP_LIST             3 '3'
+0008    | OP_DEFINE_GLOBAL    0 'test'
+0010    2 OP_GET_GLOBAL       4 'test'
+0012    | OP_PRINT
+0013    3 OP_NIL
+0014    | OP_RETURN
+testtest          [ <script> ]
+0000    1 OP_CONSTANT         1 '1'
+          [ <script> ][ 1 ]
+0002    | OP_CONSTANT         2 '2'
+          [ <script> ][ 1 ][ 2 ]
+0004    | OP_CONSTANT         3 '3'
+          [ <script> ][ 1 ][ 2 ][ 3 ]
+0006    | OP_LIST             3 '3'
+776          [ <script> ][ 1 ][ 2 ][ 3 ]
+0009    | OP_CONSTANT         7 '0'
+          [ <script> ][ 1 ][ 2 ][ 3 ][ 0 ]
+0011    | OP_POP
+          [ <script> ][ 1 ][ 2 ][ 3 ]
+0012    | OP_PRINT
+3
+          [ <script> ][ 1 ][ 2 ]
+0013    3 OP_NIL
+          [ <script> ][ 1 ][ 2 ][ nil ]
+0014    | OP_RETURN
+testtest

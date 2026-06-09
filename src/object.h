@@ -36,9 +36,9 @@ typedef enum {
   OBJ_NATIVE,
   OBJ_STRING,
   OBJ_ARRAY,
-  OBJ_UPVALUE
- ,OBJ_MAP
- ,OBJ_FILE
+  OBJ_UPVALUE,
+  OBJ_LIST,
+  OBJ_FILE
 } ObjType;
 
 struct Obj {
@@ -114,9 +114,11 @@ void printObject(Value value);
 #define isObjType(value, typ) (IS_OBJ(value) && AS_OBJ(value)->type == (typ))
 
 typedef struct {
-  Obj obj;
-  Table entries;
-} ObjMap;
+    Obj obj;
+    int count;
+    int capacity;
+    Value* items;
+} ObjList;
 
 typedef struct {
   Obj obj;
@@ -134,12 +136,12 @@ typedef struct {
 
 ObjArray* newArray();
 
-#define IS_MAP(value) isObjType(value, OBJ_MAP)
-#define AS_MAP(value) ((ObjMap*)AS_OBJ(value))
+#define IS_LIST(value) isObjType(value, OBJ_LIST)
+#define AS_LIST(value) ((ObjList*)AS_OBJ(value))
 #define IS_FILE(value) isObjType(value, OBJ_FILE)
 #define AS_FILE(value) ((ObjFile*)AS_OBJ(value))
 
-ObjMap* newMap();
+ObjList* newList();
 ObjFile* newFileObj(FILE* handle, ObjString* name);
 
 #endif

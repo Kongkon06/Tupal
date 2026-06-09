@@ -19,7 +19,8 @@ typedef struct {
 
 static Keyword keywords[] = {
   {"আৰু", TOKEN_AND},
-  {"বিষয়", TOKEN_CLASS},
+  {"class", TOKEN_CLASS},
+  {"list", TOKEN_LIST},
   {"নহলে", TOKEN_ELSE},
   {"মিছা", TOKEN_FALSE},
   {"for", TOKEN_FOR},
@@ -32,7 +33,7 @@ static Keyword keywords[] = {
   {"ডাংগৰিয়া", TOKEN_SUPER},
   {"this", TOKEN_THIS},
   {"সঁচা", TOKEN_TRUE},
-  {"চলক", TOKEN_VAR},
+  {"var", TOKEN_VAR},
   {"যেতিয়া", TOKEN_WHILE},
 };
 
@@ -166,6 +167,8 @@ Token scanToken() {
     case ')': return makeToken(TOKEN_RIGHT_PAREN);
     case '{': return makeToken(TOKEN_LEFT_BRACE);
     case '}': return makeToken(TOKEN_RIGHT_BRACE);
+    case '[': return makeToken(TOKEN_LEFT_BRACKET);
+    case ']': return makeToken(TOKEN_RIGHT_BRACKET);
     case ';': return makeToken(TOKEN_SEMICOLON);
     case ',': return makeToken(TOKEN_COMMA);
     case '.': return makeToken(TOKEN_DOT);

@@ -2,9 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <wchar.h>
 #include <locale.h>
-#include <wctype.h>
 
 #include "common.h"
 #include "chunk.h"
@@ -23,42 +21,6 @@ static void repl() {
 
     interpret(line);
   }
-}
-
-wchar_t* WreadFile(const char* path) {
-  setlocale(LC_ALL, "");
-
-  FILE* file = fopen(path, "rb");
-  if (file == NULL) {
-    fprintf(stderr, "Could not open file \"%s\".\n", path);
-    exit(74);
-  }
-
-  fseek(file, 0L, SEEK_END);
-  size_t fileSize = ftell(file);
-  rewind(file);
-
-  char* buffer = (char*)malloc(fileSize + 1);
-  if (buffer == NULL) {
-    fprintf(stderr, "Not enough memory.\n");
-    exit(74);
-  }
-
-  size_t bytesRead = fread(buffer, 1, fileSize, file);
-  buffer[bytesRead] = '\0';
-  fclose(file);
-
-  size_t wlen = mbstowcs(NULL, buffer, 0);
-  if (wlen == (size_t)-1) {
-    fprintf(stderr, "Conversion to wide char failed.\n");
-    exit(74);
-  }
-
-  wchar_t* wbuffer = (wchar_t*)malloc((wlen + 1) * sizeof(wchar_t));
-  mbstowcs(wbuffer, buffer, wlen + 1);
-
-  free(buffer);
-  return wbuffer;
 }
 
 static char* readFile(const char* path) {

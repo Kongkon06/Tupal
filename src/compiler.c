@@ -437,7 +437,6 @@ static void grouping(bool canAssign) {
 
 static void number(bool canAssign) {
   double value = strtod(parser.previous.start, NULL);
-
   emitConstant(NUMBER_VAL(value));
 }
 
@@ -736,6 +735,25 @@ static void funDeclaration() {
   defineVariable(global);
 }
 
+static void listDeclaration() {
+    uint8_t global = parseVariable("Expect list name.");
+    consume(TOKEN_LEFT_BRACKET,"Expect '[' after list name.");
+    int count = 0;
+    if (!check(TOKEN_RIGHT_BRACKET)) {
+        do {
+            expression();
+            count++;
+            if (count > 255) {
+                error("Too many list elements.");
+            }
+        } while (match(TOKEN_COMMA));
+    }
+    consume(TOKEN_RIGHT_BRACKET,"Expect ']' after list items.");
+    emitBytes(OP_LIST,(uint8_t)count);
+    consume(TOKEN_SEMICOLON,"Expect ';' after list declaration.");
+    defineVariable(global);
+}
+
 static void varDeclaration() {
   uint8_t global = parseVariable("Expect variable name.");
 
@@ -885,10 +903,10 @@ static void synchronize() {
 static void declaration() {
   if (match(TOKEN_CLASS)) {
     classDeclaration();
-
   } else if (match(TOKEN_FUN)) {
-
     funDeclaration();
+  } else if (match(TOKEN_LIST)) {
+    listDeclaration();
   } else if (match(TOKEN_VAR)) {
     varDeclaration();
   } else {
