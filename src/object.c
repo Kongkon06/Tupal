@@ -90,19 +90,31 @@ ObjNative *newNative(NativeFn function)
   return native;
 }
 
-ObjArray *newArray()
-{
-  ObjArray *array = ALLOCATE_OBJ(ObjArray, OBJ_ARRAY);
-  initValueArray(&array->elements);
-  return array;
-}
-
 ObjFile *newFileObj(FILE *handle, ObjString *name)
 {
   ObjFile *file = ALLOCATE_OBJ(ObjFile, OBJ_FILE);
   file->handle = handle;
   file->name = name;
   return file;
+}
+
+void writeList(ObjList* list, Value value) {
+    if (list->capacity < list->count + 1) {
+
+        int oldCapacity = list->capacity;
+
+        list->capacity =
+            GROW_CAPACITY(oldCapacity);
+
+        list->items =
+            GROW_ARRAY(
+                Value,
+                list->items,
+                oldCapacity,
+                list->capacity
+            );
+    }
+    list->items[list->count++] = value;
 }
 
 static ObjString *allocateString(char *chars, int length,
@@ -204,19 +216,6 @@ void printObject(Value value)
   case OBJ_STRING:
     printf("%s", AS_CSTRING(value));
     break;
-  case OBJ_ARRAY:
-  {
-    ObjArray *arr = AS_ARRAY(value);
-    printf("[");
-    for (int i = 0; i < arr->elements.count; i++)
-    {
-      if (i > 0)
-        printf(", ");
-      printValue(arr->elements.values[i]);
-    }
-    printf("]");
-    break;
-  }
   case OBJ_LIST:
   {
     ObjList *list = AS_LIST(value);
@@ -228,7 +227,7 @@ void printObject(Value value)
         printf(", ");
       }
     }
-    printf(" ]");
+    printf(" ]\n");
     break;
   }
   case OBJ_FILE:

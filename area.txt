@@ -1,2 +1,11 @@
-list area[1,2,4];
+list area[ "all", "ball", "kall"];
+area.push("test");
 প্ৰকাশ area;
+area.pop();
+প্ৰকাশ area;
+প্ৰকাশ area.size();
+area.reverse();
+প্ৰকাশ area;
+
+
+

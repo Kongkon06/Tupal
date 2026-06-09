@@ -106,11 +106,6 @@ static void blackenObject(Obj* object) {
      
       break;
     }
-    case OBJ_ARRAY: {
-      ObjArray* arr = (ObjArray*)object;
-      markArray(&arr->elements);
-      break;
-    }
     case OBJ_UPVALUE:
       markValue(((ObjUpvalue*)object)->closed);
       break;
@@ -169,12 +164,6 @@ static void freeObject(Obj* object) {
       ObjFile* file = (ObjFile*)object;
       if (file->handle != NULL) fclose(file->handle);
       FREE(ObjFile, object);
-      break;
-    }
-    case OBJ_ARRAY: {
-      ObjArray* arr = (ObjArray*)object;
-      freeValueArray(&arr->elements);
-      FREE(ObjArray, object);
       break;
     }
   }

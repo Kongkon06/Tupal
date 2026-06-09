@@ -35,7 +35,6 @@ typedef enum {
   OBJ_INSTANCE,
   OBJ_NATIVE,
   OBJ_STRING,
-  OBJ_ARRAY,
   OBJ_UPVALUE,
   OBJ_LIST,
   OBJ_FILE
@@ -126,15 +125,6 @@ typedef struct {
   ObjString* name;
 } ObjFile;
 
-typedef struct {
-  Obj obj;
-  ValueArray elements;
-} ObjArray;
-
-#define IS_ARRAY(value) isObjType(value, OBJ_ARRAY)
-#define AS_ARRAY(value) ((ObjArray*)AS_OBJ(value))
-
-ObjArray* newArray();
 
 #define IS_LIST(value) isObjType(value, OBJ_LIST)
 #define AS_LIST(value) ((ObjList*)AS_OBJ(value))
@@ -142,6 +132,7 @@ ObjArray* newArray();
 #define AS_FILE(value) ((ObjFile*)AS_OBJ(value))
 
 ObjList* newList();
+void writeList(ObjList* list, Value value);
 ObjFile* newFileObj(FILE* handle, ObjString* name);
 
 #endif

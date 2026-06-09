@@ -117,76 +117,6 @@ static Value sleepNative(int argCount, Value *args)
   return NIL_VAL;
 }
 
-static Value listNative(int argCount, Value *args)
-{
-  if (argCount != 0)
-  {
-    runtimeError("list() takes no arguments");
-    return NIL_VAL;
-  }
-  return OBJ_VAL(newArray());
-}
-
-static Value listGetNative(int argCount, Value *args)
-{
-  if (argCount != 2 || !IS_ARRAY(args[0]) || !IS_NUMBER(args[1]))
-  {
-    runtimeError("list_get expects (list, index)");
-    return NIL_VAL;
-  }
-  ObjArray *arr = AS_ARRAY(args[0]);
-  int idx = (int)AS_NUMBER(args[1]);
-  if (idx < 0 || idx >= arr->elements.count)
-  {
-    runtimeError("list_get index out of bounds");
-    return NIL_VAL;
-  }
-  return arr->elements.values[idx];
-}
-
-static Value listSetNative(int argCount, Value *args)
-{
-  if (argCount != 3 || !IS_ARRAY(args[0]) || !IS_NUMBER(args[1]))
-  {
-    runtimeError("list_set expects (list, index, value)");
-    return NIL_VAL;
-  }
-  ObjArray *arr = AS_ARRAY(args[0]);
-  int idx = (int)AS_NUMBER(args[1]);
-  if (idx < 0 || idx >= arr->elements.count)
-  {
-    runtimeError("list_set index out of bounds");
-    return NIL_VAL;
-  }
-  arr->elements.values[idx] = args[2];
-  return NIL_VAL;
-}
-
-static Value listPopNative(int argCount, Value *args)
-{
-  if (argCount != 1 || !IS_ARRAY(args[0]))
-  {
-    runtimeError("list_pop expects (list)");
-    return NIL_VAL;
-  }
-  ObjArray *arr = AS_ARRAY(args[0]);
-  if (arr->elements.count == 0)
-    return NIL_VAL;
-  Value val = arr->elements.values[arr->elements.count - 1];
-  arr->elements.count--;
-  return val;
-}
-
-static Value listLengthNative(int argCount, Value *args)
-{
-  if (argCount != 1 || !IS_ARRAY(args[0]))
-  {
-    runtimeError("list_length expects (list)");
-    return NIL_VAL;
-  }
-  ObjArray *arr = AS_ARRAY(args[0]);
-  return NUMBER_VAL((double)arr->elements.count);
-}
 static void resetStack()
 {
   vm.stackTop = vm.stack;
@@ -250,13 +180,8 @@ void initVM()
 
   defineNative("খোল", openNative);
   defineNative("file_read", fileReadNative);
-  defineNative("file_write  ", fileWriteNative);
+  defineNative("file_write", fileWriteNative);
   defineNative("file_close", fileCloseNative);
-  defineNative("list", listNative);
-  defineNative("list_get", listGetNative);
-  defineNative("list_set", listSetNative);
-  defineNative("list_pop", listPopNative);
-  defineNative("list_length", listLengthNative);
   defineNative("sleep", sleepNative);
 }
 
@@ -400,6 +325,7 @@ static bool bindMethod(ObjClass *klass, ObjString *name)
   push(OBJ_VAL(bound));
   return true;
 }
+
 static ObjUpvalue *captureUpvalue(Value *local)
 {
   ObjUpvalue *prevUpvalue = NULL;
@@ -446,6 +372,100 @@ static void defineMethod(ObjString *name)
   ObjClass *klass = AS_CLASS(peek(1));
   tableSet(&klass->methods, name, method);
   pop();
+}
+
+static bool invokeListMethod(ObjList *list, ObjString *method, int argCount)
+{
+  // push(value)
+  if (strcmp(method->chars, "push") == 0)
+  {
+    if (argCount != 1)
+    {
+      runtimeError("push() expects 1 argument.");
+      return false;
+    }
+
+    writeList(list, peek(0));
+
+    pop(); // argument
+    pop(); // receiver list
+
+    push(NIL_VAL);
+
+    return true;
+  }
+
+  // pop()
+  if (strcmp(method->chars, "pop") == 0)
+  {
+    if (argCount != 0)
+    {
+      runtimeError("pop() expects no arguments.");
+      return false;
+    }
+
+    if (list->count == 0)
+    {
+      runtimeError("Cannot pop from empty list.");
+      return false;
+    }
+
+    Value value = list->items[list->count - 1];
+    list->count--;
+
+    pop(); // receiver
+    push(value);
+
+    return true;
+  }
+
+  // size()
+  if (strcmp(method->chars, "size") == 0)
+  {
+    if (argCount != 0)
+    {
+      runtimeError("size() expects no arguments.");
+      return false;
+    }
+
+    pop(); // receiver
+
+    push(NUMBER_VAL(list->count));
+
+    return true;
+  }
+
+  // reverse()
+  if (strcmp(method->chars, "reverse") == 0)
+  {
+    if (argCount != 0)
+    {
+      runtimeError("reverse() expects no arguments.");
+      return false;
+    }
+
+    for (int i = 0, j = list->count - 1;
+         i < j;
+         i++, j--)
+    {
+
+      Value tmp = list->items[i];
+      list->items[i] = list->items[j];
+      list->items[j] = tmp;
+    }
+
+    pop(); // receiver
+
+    push(NIL_VAL);
+
+    return true;
+  }
+
+  runtimeError(
+      "Undefined list method '%s'.",
+      method->chars);
+
+  return false;
 }
 
 static bool isFalsey(Value value)
@@ -735,10 +755,26 @@ static InterpretResult run()
     {
       ObjString *method = READ_STRING();
       int argCount = READ_BYTE();
+
+      Value receiver = peek(argCount);
+
+      if (IS_LIST(receiver))
+      {
+        if (!invokeListMethod(
+                AS_LIST(receiver),
+                method,
+                argCount))
+        {
+          return INTERPRET_RUNTIME_ERROR;
+        }
+        break;
+      }
+
       if (!invoke(method, argCount))
       {
         return INTERPRET_RUNTIME_ERROR;
       }
+
       frame = &vm.frames[vm.frameCount - 1];
       break;
     }
@@ -816,18 +852,20 @@ static InterpretResult run()
     case OP_METHOD:
       defineMethod(READ_STRING());
       break;
-    case OP_LIST: {
-    int count = READ_BYTE();
-    ObjList *list = newList();
-    list->capacity = count;
-    list->items = ALLOCATE(Value, count);
-    for (int i = count - 1; i >= 0; i--) {
+    case OP_LIST:
+    {
+      int count = READ_BYTE();
+      ObjList *list = newList();
+      list->capacity = count;
+      list->items = ALLOCATE(Value, count);
+      for (int i = count - 1; i >= 0; i--)
+      {
         list->items[i] = pop();
+      }
+      list->count = count;
+      push(OBJ_VAL(list));
+      break;
     }
-    list->count = count;
-    push(OBJ_VAL(list));
-    break;
-}
     }
   }
 
