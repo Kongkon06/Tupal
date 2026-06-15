@@ -25,6 +25,16 @@ static int constantInstruction(const char* name, Chunk* chunk,
   printf("'\n");
   return offset + 2;
 }
+static int constantLongInstruction(const char* name, Chunk* chunk,
+                                   int offset) {
+  uint32_t constant = chunk->code[offset + 1] |
+                      (chunk->code[offset + 2] << 8) |
+                      (chunk->code[offset + 3] << 16);
+  printf("%-16s %4d '", name, constant);
+  printValue(chunk->constants.values[constant]);
+  printf("'\n");
+  return offset + 4;
+}
 static int invokeInstruction(const char* name, Chunk* chunk,
                                 int offset) {
   uint8_t constant = chunk->code[offset + 1];
@@ -160,6 +170,22 @@ int disassembleInstruction(Chunk* chunk, int offset) {
       return simpleInstruction("OP_INHERIT", offset);
     case OP_METHOD:
       return constantInstruction("OP_METHOD", chunk, offset);
+    case OP_CONSTANT_LONG:
+      return constantLongInstruction("OP_CONSTANT_LONG", chunk, offset);
+    case OP_MODULO:
+      return simpleInstruction("OP_MODULO", offset);
+    case OP_BITWISE_AND:
+      return simpleInstruction("OP_BITWISE_AND", offset);
+    case OP_BITWISE_OR:
+      return simpleInstruction("OP_BITWISE_OR", offset);
+    case OP_BITWISE_XOR:
+      return simpleInstruction("OP_BITWISE_XOR", offset);
+    case OP_LEFT_SHIFT:
+      return simpleInstruction("OP_LEFT_SHIFT", offset);
+    case OP_RIGHT_SHIFT:
+      return simpleInstruction("OP_RIGHT_SHIFT", offset);
+    case OP_BITWISE_NOT:
+      return simpleInstruction("OP_BITWISE_NOT", offset);
     default:
       printf("Unknown opcode %d\n", instruction);
       return offset + 1;

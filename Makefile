@@ -2,6 +2,7 @@
 
 CFLAGS = -Wall -Wextra -std=c99 -g -Wno-unused-parameter -I$(SRCDIR)
 CFLAGS_RELEASE = -Wall -Wextra -std=c99 -O2 -I$(SRCDIR)
+LDFLAGS = -lgdi32
 
 TARGET = tupal
 OBJDIR = build
@@ -16,7 +17,8 @@ SOURCES = $(SRCDIR)/main.c \
           $(SRCDIR)/table.c \
           $(SRCDIR)/value.c \
           $(SRCDIR)/chunk.c \
-          $(SRCDIR)/debug.c
+          $(SRCDIR)/debug.c \
+          $(SRCDIR)/graphics.c
 
 
 HEADERS = \
@@ -29,7 +31,8 @@ HEADERS = \
     $(SRCDIR)/memory.h \
     $(SRCDIR)/object.h \
     $(SRCDIR)/table.h \
-    $(SRCDIR)/value.h
+    $(SRCDIR)/value.h \
+    $(SRCDIR)/graphics.h
 
 OBJECTS = $(patsubst $(SRCDIR)/%.c,$(OBJDIR)/%.o,$(SOURCES))
 

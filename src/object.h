@@ -38,7 +38,8 @@ typedef enum {
   OBJ_UPVALUE,
   OBJ_LIST,
   OBJ_FILE,
-  OBJ_MAP
+  OBJ_MAP,
+  OBJ_BYTE_ARRAY
 } ObjType;
 
 struct Obj {
@@ -132,14 +133,25 @@ typedef struct {
   ObjString* name;
 } ObjFile;
 
+typedef struct {
+  Obj obj;
+  int count;
+  uint8_t* bytes;
+} ObjByteArray;
 
 #define IS_LIST(value) isObjType(value, OBJ_LIST)
 #define AS_LIST(value) ((ObjList*)AS_OBJ(value))
 #define IS_FILE(value) isObjType(value, OBJ_FILE)
 #define AS_FILE(value) ((ObjFile*)AS_OBJ(value))
+#define IS_BYTE_ARRAY(value) isObjType(value, OBJ_BYTE_ARRAY)
+#define AS_BYTE_ARRAY(value) ((ObjByteArray*)AS_OBJ(value))
+#define IS_MAP(value) isObjType(value, OBJ_MAP)
+#define AS_MAP(value) ((ObjMap*)AS_OBJ(value))
 
 ObjList* newList();
 void writeList(ObjList* list, Value value);
 ObjFile* newFileObj(FILE* handle, ObjString* name);
+ObjByteArray* newByteArray(int count);
+ObjMap* newMap();
 
 #endif

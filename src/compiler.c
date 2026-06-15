@@ -23,11 +23,15 @@ typedef enum {
   PREC_ASSIGNMENT,  // =
   PREC_OR,          // or
   PREC_AND,         // and
+  PREC_BITWISE_OR,  // |
+  PREC_BITWISE_XOR, // ^
+  PREC_BITWISE_AND, // &
   PREC_EQUALITY,    // == !=
   PREC_COMPARISON,  // < > <= >=
+  PREC_SHIFT,       // << >>
   PREC_TERM,        // + -
   PREC_FACTOR,      // * /
-  PREC_UNARY,       // ! -
+  PREC_UNARY,       // ! - ~
   PREC_CALL,        // . ()
   PREC_PRIMARY
 } Precedence;
@@ -168,7 +172,15 @@ static uint8_t makeConstant(Value value) {
   return (uint8_t)constant;
 }
 static void emitConstant(Value value) {
-  emitBytes(OP_CONSTANT, makeConstant(value));
+  int constant = addConstant(currentChunk(), value);
+  if (constant <= UINT8_MAX) {
+    emitBytes(OP_CONSTANT, (uint8_t)constant);
+  } else {
+    emitByte(OP_CONSTANT_LONG);
+    emitByte((uint8_t)(constant & 0xff));
+    emitByte((uint8_t)((constant >> 8) & 0xff));
+    emitByte((uint8_t)((constant >> 16) & 0xff));
+  }
 }
 static void patchJump(int offset) {
   int jump = currentChunk()->count - offset - 2;
@@ -396,6 +408,12 @@ static void binary(bool canAssign) {
     case TOKEN_MINUS:         emitByte(OP_SUBTRACT); break;
     case TOKEN_STAR:          emitByte(OP_MULTIPLY); break;
     case TOKEN_SLASH:         emitByte(OP_DIVIDE); break;
+    case TOKEN_PERCENT:       emitByte(OP_MODULO); break;
+    case TOKEN_AMPERSAND:     emitByte(OP_BITWISE_AND); break;
+    case TOKEN_PIPE:          emitByte(OP_BITWISE_OR); break;
+    case TOKEN_CARET:         emitByte(OP_BITWISE_XOR); break;
+    case TOKEN_LEFT_SHIFT:    emitByte(OP_LEFT_SHIFT); break;
+    case TOKEN_RIGHT_SHIFT:   emitByte(OP_RIGHT_SHIFT); break;
     default: return; // Unreachable.
   }
 }
@@ -533,6 +551,7 @@ static void unary(bool canAssign) {
   switch (operatorType) {
     case TOKEN_BANG: emitByte(OP_NOT); break;
     case TOKEN_MINUS: emitByte(OP_NEGATE); break;
+    case TOKEN_TILDE: emitByte(OP_BITWISE_NOT); break;
     default: return; // Unreachable.
   }
 }
@@ -563,6 +582,13 @@ ParseRule rules[] = {
   [TOKEN_SEMICOLON]     = {NULL,     NULL,   PREC_NONE},
   [TOKEN_SLASH]         = {NULL,     binary, PREC_FACTOR},
   [TOKEN_STAR]          = {NULL,     binary, PREC_FACTOR},
+  [TOKEN_PERCENT]       = {NULL,     binary, PREC_FACTOR},
+  [TOKEN_AMPERSAND]     = {NULL,     binary, PREC_BITWISE_AND},
+  [TOKEN_PIPE]          = {NULL,     binary, PREC_BITWISE_OR},
+  [TOKEN_CARET]         = {NULL,     binary, PREC_BITWISE_XOR},
+  [TOKEN_TILDE]         = {unary,    NULL,   PREC_NONE},
+  [TOKEN_LEFT_SHIFT]    = {NULL,     binary, PREC_SHIFT},
+  [TOKEN_RIGHT_SHIFT]   = {NULL,     binary, PREC_SHIFT},
 
   [TOKEN_BANG]          = {unary,    NULL,   PREC_NONE},
 

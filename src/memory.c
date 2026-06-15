@@ -103,9 +103,21 @@ static void blackenObject(Obj* object) {
       break;
     }
     case OBJ_LIST: {
-     
+      ObjList* list = (ObjList*)object;
+      for (int i = 0; i < list->count; i++) {
+        markValue(list->items[i]);
+      }
       break;
     }
+    case OBJ_BYTE_ARRAY:
+      break;
+    case OBJ_MAP: {
+      ObjMap* map = (ObjMap*)object;
+      markTable(&map->table);
+      break;
+    }
+    case OBJ_FILE:
+      break;
     case OBJ_UPVALUE:
       markValue(((ObjUpvalue*)object)->closed);
       break;
@@ -164,6 +176,24 @@ static void freeObject(Obj* object) {
       ObjFile* file = (ObjFile*)object;
       if (file->handle != NULL) fclose(file->handle);
       FREE(ObjFile, object);
+      break;
+    }
+    case OBJ_LIST: {
+      ObjList* list = (ObjList*)object;
+      FREE_ARRAY(Value, list->items, list->capacity);
+      FREE(ObjList, object);
+      break;
+    }
+    case OBJ_BYTE_ARRAY: {
+      ObjByteArray* array = (ObjByteArray*)object;
+      FREE_ARRAY(uint8_t, array->bytes, array->count);
+      FREE(ObjByteArray, object);
+      break;
+    }
+    case OBJ_MAP: {
+      ObjMap* map = (ObjMap*)object;
+      freeTable(&map->table);
+      FREE(ObjMap, object);
       break;
     }
   }

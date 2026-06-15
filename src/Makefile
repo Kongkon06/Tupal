@@ -10,9 +10,9 @@ OBJDIR = build
 OBJECTS = $(OBJDIR)\main.o $(OBJDIR)\vm.o $(OBJDIR)\compiler.o \
           $(OBJDIR)\scanner.o $(OBJDIR)\memory.o $(OBJDIR)\object.o \
           $(OBJDIR)\table.o $(OBJDIR)\value.o $(OBJDIR)\chunk.o \
-          $(OBJDIR)\debug.o
+          $(OBJDIR)\debug.o $(OBJDIR)\graphics.o
 
-HEADERS = common.h chunk.h debug.h vm.h compiler.h scanner.h memory.h object.h table.h value.h
+HEADERS = common.h chunk.h debug.h vm.h compiler.h scanner.h memory.h object.h table.h value.h graphics.h
 
 # Default target
 all: $(OBJDIR) $(TARGET)
@@ -23,7 +23,7 @@ $(OBJDIR):
 
 # Link
 $(TARGET): $(OBJECTS)
-	$(CC) $(CFLAGS) -o $@ $(OBJECTS)
+	$(CC) $(CFLAGS) -o $@ $(OBJECTS) -lgdi32
 
 # Compile rules
 $(OBJDIR)\main.o: main.c $(HEADERS)
@@ -55,6 +55,9 @@ $(OBJDIR)\chunk.o: chunk.c $(HEADERS)
 
 $(OBJDIR)\debug.o: debug.c $(HEADERS)
 	$(CC) $(CFLAGS) -c debug.c -o $(OBJDIR)\debug.o
+
+$(OBJDIR)\graphics.o: graphics.c $(HEADERS)
+	$(CC) $(CFLAGS) -c graphics.c -o $(OBJDIR)\graphics.o
 
 # Release
 release: CFLAGS = $(CFLAGS_RELEASE)

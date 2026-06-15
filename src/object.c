@@ -98,6 +98,22 @@ ObjFile *newFileObj(FILE *handle, ObjString *name)
   return file;
 }
 
+ObjByteArray *newByteArray(int count)
+{
+  ObjByteArray *array = ALLOCATE_OBJ(ObjByteArray, OBJ_BYTE_ARRAY);
+  array->count = count;
+  array->bytes = ALLOCATE(uint8_t, count);
+  memset(array->bytes, 0, count);
+  return array;
+}
+
+ObjMap *newMap()
+{
+  ObjMap *map = ALLOCATE_OBJ(ObjMap, OBJ_MAP);
+  initTable(&map->table);
+  return map;
+}
+
 void writeList(ObjList* list, Value value) {
     if (list->capacity < list->count + 1) {
         int oldCapacity = list->capacity;
@@ -218,7 +234,7 @@ void printObject(Value value)
         printf(", ");
       }
     }
-    printf(" ]\n");
+    printf(" ]");
     break;
   }
   case OBJ_FILE:
@@ -236,6 +252,12 @@ void printObject(Value value)
   }
   case OBJ_UPVALUE:
     printf("upvalue");
+    break;
+  case OBJ_BYTE_ARRAY:
+    printf("<byte array %d>", AS_BYTE_ARRAY(value)->count);
+    break;
+  case OBJ_MAP:
+    printf("<map>");
     break;
   }
 }

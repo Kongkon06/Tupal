@@ -14,9 +14,29 @@
 #include "object.h"
 #include "memory.h"
 #include "vm.h"
+#include <math.h>
+#include "graphics.h"
 
-VM vm; // [one]
 VM vm;
+
+static ObjString* mapKeyString(Value value) {
+  if (IS_STRING(value)) {
+    return AS_STRING(value);
+  }
+  if (IS_NUMBER(value)) {
+    char buf[64];
+    sprintf(buf, "%.14g", AS_NUMBER(value));
+    return copyString(buf, (int)strlen(buf));
+  }
+  if (IS_BOOL(value)) {
+    return AS_BOOL(value) ? copyString("true", 4) : copyString("false", 5);
+  }
+  if (IS_NIL(value)) {
+    return copyString("nil", 3);
+  }
+  return copyString("<object>", 8);
+}
+
 static void runtimeError(const char *format, ...);
 static Value clockNative(int argCount, Value *args)
 {
@@ -117,6 +137,237 @@ static Value sleepNative(int argCount, Value *args)
   return NIL_VAL;
 }
 
+static Value sinNative(int argCount, Value *args) {
+  if (argCount != 1 || !IS_NUMBER(args[0])) {
+    runtimeError("sin expects 1 number argument.");
+    return NIL_VAL;
+  }
+  return NUMBER_VAL(sin(AS_NUMBER(args[0])));
+}
+
+static Value cosNative(int argCount, Value *args) {
+  if (argCount != 1 || !IS_NUMBER(args[0])) {
+    runtimeError("cos expects 1 number argument.");
+    return NIL_VAL;
+  }
+  return NUMBER_VAL(cos(AS_NUMBER(args[0])));
+}
+
+static Value tanNative(int argCount, Value *args) {
+  if (argCount != 1 || !IS_NUMBER(args[0])) {
+    runtimeError("tan expects 1 number argument.");
+    return NIL_VAL;
+  }
+  return NUMBER_VAL(tan(AS_NUMBER(args[0])));
+}
+
+static Value sqrtNative(int argCount, Value *args) {
+  if (argCount != 1 || !IS_NUMBER(args[0])) {
+    runtimeError("sqrt expects 1 number argument.");
+    return NIL_VAL;
+  }
+  return NUMBER_VAL(sqrt(AS_NUMBER(args[0])));
+}
+
+static Value atan2Native(int argCount, Value *args) {
+  if (argCount != 2 || !IS_NUMBER(args[0]) || !IS_NUMBER(args[1])) {
+    runtimeError("atan2 expects 2 number arguments (y, x).");
+    return NIL_VAL;
+  }
+  return NUMBER_VAL(atan2(AS_NUMBER(args[0]), AS_NUMBER(args[1])));
+}
+
+static Value absNative(int argCount, Value *args) {
+  if (argCount != 1 || !IS_NUMBER(args[0])) {
+    runtimeError("abs expects 1 number argument.");
+    return NIL_VAL;
+  }
+  return NUMBER_VAL(fabs(AS_NUMBER(args[0])));
+}
+
+static Value floorNative(int argCount, Value *args) {
+  if (argCount != 1 || !IS_NUMBER(args[0])) {
+    runtimeError("floor expects 1 number argument.");
+    return NIL_VAL;
+  }
+  return NUMBER_VAL(floor(AS_NUMBER(args[0])));
+}
+
+static Value ceilNative(int argCount, Value *args) {
+  if (argCount != 1 || !IS_NUMBER(args[0])) {
+    runtimeError("ceil expects 1 number argument.");
+    return NIL_VAL;
+  }
+  return NUMBER_VAL(ceil(AS_NUMBER(args[0])));
+}
+
+static Value toStringNative(int argCount, Value *args) {
+  if (argCount != 1) {
+    runtimeError("to_string expects 1 argument.");
+    return NIL_VAL;
+  }
+  ObjString* s = mapKeyString(args[0]);
+  return OBJ_VAL(s);
+}
+
+static Value toNumberNative(int argCount, Value *args) {
+  if (argCount != 1 || !IS_STRING(args[0])) {
+    runtimeError("to_number expects 1 string argument.");
+    return NIL_VAL;
+  }
+  return NUMBER_VAL(strtod(AS_CSTRING(args[0]), NULL));
+}
+
+static Value charAtNative(int argCount, Value *args) {
+  if (argCount != 2 || !IS_STRING(args[0]) || !IS_NUMBER(args[1])) {
+    runtimeError("char_at expects (string, index).");
+    return NIL_VAL;
+  }
+  ObjString* s = AS_STRING(args[0]);
+  int index = (int)AS_NUMBER(args[1]);
+  if (index < 0 || index >= s->length) {
+    runtimeError("char_at index out of bounds.");
+    return NIL_VAL;
+  }
+  return OBJ_VAL(copyString(&s->chars[index], 1));
+}
+
+static Value substringNative(int argCount, Value *args) {
+  if (argCount != 3 || !IS_STRING(args[0]) || !IS_NUMBER(args[1]) || !IS_NUMBER(args[2])) {
+    runtimeError("substring expects (string, start, length).");
+    return NIL_VAL;
+  }
+  ObjString* s = AS_STRING(args[0]);
+  int start = (int)AS_NUMBER(args[1]);
+  int len = (int)AS_NUMBER(args[2]);
+  if (start < 0 || start > s->length || len < 0 || start + len > s->length) {
+    runtimeError("substring bounds out of range.");
+    return NIL_VAL;
+  }
+  return OBJ_VAL(copyString(&s->chars[start], len));
+}
+
+static Value strLenNative(int argCount, Value *args) {
+  if (argCount != 1 || !IS_STRING(args[0])) {
+    runtimeError("str_len expects 1 string argument.");
+    return NIL_VAL;
+  }
+  return NUMBER_VAL(AS_STRING(args[0])->length);
+}
+
+static Value byteArrayNewNative(int argCount, Value *args) {
+  if (argCount != 1 || !IS_NUMBER(args[0])) {
+    runtimeError("byte_array_new expects 1 number argument (size).");
+    return NIL_VAL;
+  }
+  int size = (int)AS_NUMBER(args[0]);
+  if (size <= 0) {
+    runtimeError("byte_array_new size must be positive.");
+    return NIL_VAL;
+  }
+  return OBJ_VAL(newByteArray(size));
+}
+
+static Value mapNewNative(int argCount, Value *args) {
+  return OBJ_VAL(newMap());
+}
+
+static Value mapKeysNative(int argCount, Value *args) {
+  if (argCount != 1 || !IS_MAP(args[0])) {
+    runtimeError("map_keys expects 1 map argument.");
+    return NIL_VAL;
+  }
+  ObjMap* map = AS_MAP(args[0]);
+  ObjList* list = newList();
+  push(OBJ_VAL(list)); // Avoid GC
+  for (int i = 0; i < map->table.capacity; i++) {
+    Entry* entry = &map->table.entries[i];
+    if (entry->key != NULL) {
+      writeList(list, OBJ_VAL(entry->key));
+    }
+  }
+  pop();
+  return OBJ_VAL(list);
+}
+
+static Value mapHasNative(int argCount, Value *args) {
+  if (argCount != 2 || !IS_MAP(args[0])) {
+    runtimeError("map_has expects (map, key).");
+    return BOOL_VAL(false);
+  }
+  ObjMap* map = AS_MAP(args[0]);
+  ObjString* key = mapKeyString(args[1]);
+  Value val;
+  return BOOL_VAL(tableGet(&map->table, key, &val));
+}
+
+static Value mapDeleteNative(int argCount, Value *args) {
+  if (argCount != 2 || !IS_MAP(args[0])) {
+    runtimeError("map_delete expects (map, key).");
+    return BOOL_VAL(false);
+  }
+  ObjMap* map = AS_MAP(args[0]);
+  ObjString* key = mapKeyString(args[1]);
+  return BOOL_VAL(tableDelete(&map->table, key));
+}
+static Value windowInitNative(int argCount, Value *args) {
+  if (argCount != 3 || !IS_NUMBER(args[0]) || !IS_NUMBER(args[1]) || !IS_STRING(args[2])) {
+    runtimeError("window_init expects (width, height, title).");
+    return BOOL_VAL(false);
+  }
+  int w = (int)AS_NUMBER(args[0]);
+  int h = (int)AS_NUMBER(args[1]);
+  const char* title = AS_CSTRING(args[2]);
+  return BOOL_VAL(initWindow(w, h, title));
+}
+
+static Value windowUpdateNative(int argCount, Value *args) {
+  if (argCount != 1 || !IS_BYTE_ARRAY(args[0])) {
+    runtimeError("window_update expects 1 byte array argument (framebuffer).");
+    return BOOL_VAL(false);
+  }
+  ObjByteArray* array = AS_BYTE_ARRAY(args[0]);
+  return BOOL_VAL(updateWindow(array->bytes, array->count));
+}
+
+static Value windowCloseNative(int argCount, Value *args) {
+  closeWindow();
+  return NIL_VAL;
+}
+
+static Value keyPressedNative(int argCount, Value *args) {
+  if (argCount != 1 || !IS_NUMBER(args[0])) {
+    runtimeError("key_pressed expects 1 number argument (vk_code).");
+    return BOOL_VAL(false);
+  }
+  int code = (int)AS_NUMBER(args[0]);
+  return BOOL_VAL(isKeyPressed(code));
+}
+
+static Value mouseXNative(int argCount, Value *args) {
+  int x, y; bool l, r;
+  getMouseState(&x, &y, &l, &r);
+  return NUMBER_VAL(x);
+}
+
+static Value mouseYNative(int argCount, Value *args) {
+  int x, y; bool l, r;
+  getMouseState(&x, &y, &l, &r);
+  return NUMBER_VAL(y);
+}
+
+static Value mouseLeftNative(int argCount, Value *args) {
+  int x, y; bool l, r;
+  getMouseState(&x, &y, &l, &r);
+  return BOOL_VAL(l);
+}
+
+static Value mouseRightNative(int argCount, Value *args) {
+  int x, y; bool l, r;
+  getMouseState(&x, &y, &l, &r);
+  return BOOL_VAL(r);
+}
+
 static void resetStack()
 {
   vm.stackTop = vm.stack;
@@ -183,10 +434,42 @@ void initVM()
   defineNative("file_write", fileWriteNative);
   defineNative("file_close", fileCloseNative);
   defineNative("sleep", sleepNative);
+
+  defineNative("sin", sinNative);
+  defineNative("cos", cosNative);
+  defineNative("tan", tanNative);
+  defineNative("sqrt", sqrtNative);
+  defineNative("atan2", atan2Native);
+  defineNative("abs", absNative);
+  defineNative("floor", floorNative);
+  defineNative("ceil", ceilNative);
+
+  defineNative("to_string", toStringNative);
+  defineNative("to_number", toNumberNative);
+  defineNative("char_at", charAtNative);
+  defineNative("substring", substringNative);
+  defineNative("str_len", strLenNative);
+
+  defineNative("byte_array_new", byteArrayNewNative);
+
+  defineNative("map_new", mapNewNative);
+  defineNative("map_keys", mapKeysNative);
+  defineNative("map_has", mapHasNative);
+  defineNative("map_delete", mapDeleteNative);
+
+  defineNative("window_init", windowInitNative);
+  defineNative("window_update", windowUpdateNative);
+  defineNative("window_close", windowCloseNative);
+  defineNative("key_pressed", keyPressedNative);
+  defineNative("mouse_x", mouseXNative);
+  defineNative("mouse_y", mouseYNative);
+  defineNative("mouse_left", mouseLeftNative);
+  defineNative("mouse_right", mouseRightNative);
 }
 
 void freeVM()
 {
+  closeWindow();
   freeTable(&vm.globals);
   freeTable(&vm.strings);
   vm.initString = NULL;
@@ -571,6 +854,16 @@ static InterpretResult run()
       push(constant);
       break;
     }
+    case OP_CONSTANT_LONG:
+    {
+      uint8_t b1 = READ_BYTE();
+      uint8_t b2 = READ_BYTE();
+      uint8_t b3 = READ_BYTE();
+      int index = b1 | (b2 << 8) | (b3 << 16);
+      Value constant = frame->closure->function->chunk.constants.values[index];
+      push(constant);
+      break;
+    }
     case OP_NIL:
       push(NIL_VAL);
       break;
@@ -741,9 +1034,59 @@ static InterpretResult run()
       }
       push(NUMBER_VAL(-AS_NUMBER(pop())));
       break;
+    case OP_MODULO:
+    {
+      if (!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1)))
+      {
+        runtimeError("Operands must be numbers.");
+        return INTERPRET_RUNTIME_ERROR;
+      }
+      double b = AS_NUMBER(pop());
+      double a = AS_NUMBER(pop());
+      push(NUMBER_VAL(fmod(a, b)));
+      break;
+    }
+#define BITWISE_BINARY_OP(op) \
+    do { \
+      if (!IS_NUMBER(peek(0)) || !IS_NUMBER(peek(1))) { \
+        runtimeError("Operands must be numbers."); \
+        return INTERPRET_RUNTIME_ERROR; \
+      } \
+      int32_t b = (int32_t)AS_NUMBER(pop()); \
+      int32_t a = (int32_t)AS_NUMBER(pop()); \
+      push(NUMBER_VAL((double)(a op b))); \
+    } while (false)
+    case OP_BITWISE_AND:
+      BITWISE_BINARY_OP(&);
+      break;
+    case OP_BITWISE_OR:
+      BITWISE_BINARY_OP(|);
+      break;
+    case OP_BITWISE_XOR:
+      BITWISE_BINARY_OP(^);
+      break;
+    case OP_LEFT_SHIFT:
+      BITWISE_BINARY_OP(<<);
+      break;
+    case OP_RIGHT_SHIFT:
+      BITWISE_BINARY_OP(>>);
+      break;
+#undef BITWISE_BINARY_OP
+    case OP_BITWISE_NOT:
+    {
+      if (!IS_NUMBER(peek(0)))
+      {
+        runtimeError("Operand must be a number.");
+        return INTERPRET_RUNTIME_ERROR;
+      }
+      int32_t a = (int32_t)AS_NUMBER(pop());
+      push(NUMBER_VAL((double)(~a)));
+      break;
+    }
     case OP_PRINT:
     {
       printValue(pop());
+      printf("\n");
       break;
     }
     case OP_JUMP:
@@ -895,41 +1238,94 @@ static InterpretResult run()
     }
     case OP_GET_INDEX:
     {
-      if (!IS_NUMBER(peek(0)) || !IS_LIST(peek(1)))
-      {
-        runtimeError("Can only index into lists with numbers.");
+      Value indexVal = peek(0);
+      Value receiver = peek(1);
+      if (IS_LIST(receiver)) {
+        if (!IS_NUMBER(indexVal)) {
+          runtimeError("List index must be a number.");
+          return INTERPRET_RUNTIME_ERROR;
+        }
+        int index = (int)AS_NUMBER(pop());
+        ObjList *list = AS_LIST(pop());
+        if (index < 0 || index >= list->count) {
+          runtimeError("List index out of range.");
+          return INTERPRET_RUNTIME_ERROR;
+        }
+        push(list->items[index]);
+      } else if (IS_BYTE_ARRAY(receiver)) {
+        if (!IS_NUMBER(indexVal)) {
+          runtimeError("Byte array index must be a number.");
+          return INTERPRET_RUNTIME_ERROR;
+        }
+        int index = (int)AS_NUMBER(pop());
+        ObjByteArray *array = AS_BYTE_ARRAY(pop());
+        if (index < 0 || index >= array->count) {
+          runtimeError("Byte array index out of range.");
+          return INTERPRET_RUNTIME_ERROR;
+        }
+        push(NUMBER_VAL(array->bytes[index]));
+      } else if (IS_MAP(receiver)) {
+        ObjString *key = mapKeyString(pop());
+        ObjMap *map = AS_MAP(pop());
+        Value result;
+        if (tableGet(&map->table, key, &result)) {
+          push(result);
+        } else {
+          push(NIL_VAL);
+        }
+      } else {
+        runtimeError("Can only index lists, byte arrays, and maps.");
         return INTERPRET_RUNTIME_ERROR;
       }
-      int index = (int)AS_NUMBER(pop());
-      ObjList *list = AS_LIST(pop());
-      if (index < 0 || index >= list->count)
-      {
-        runtimeError("List index out of range.");
-        return INTERPRET_RUNTIME_ERROR;
-      }
-      push(list->items[index]);
       break;
     }
     case OP_SET_INDEX:
     {
-      if (!IS_NUMBER(peek(1)) || !IS_LIST(peek(2)))
-      {
-        runtimeError("Can only index into lists with numbers.");
-        return INTERPRET_RUNTIME_ERROR;
-      }
       Value value = peek(0);
-      int index = (int)AS_NUMBER(peek(1));
-      ObjList *list = AS_LIST(peek(2));
-      if (index < 0 || index >= list->count)
-      {
-        runtimeError("List index out of range.");
+      Value indexVal = peek(1);
+      Value receiver = peek(2);
+      if (IS_LIST(receiver)) {
+        if (!IS_NUMBER(indexVal)) {
+          runtimeError("List index must be a number.");
+          return INTERPRET_RUNTIME_ERROR;
+        }
+        int index = (int)AS_NUMBER(indexVal);
+        ObjList *list = AS_LIST(receiver);
+        if (index < 0 || index >= list->count) {
+          runtimeError("List index out of range.");
+          return INTERPRET_RUNTIME_ERROR;
+        }
+        list->items[index] = value;
+        pop(); pop(); pop();
+        push(value);
+      } else if (IS_BYTE_ARRAY(receiver)) {
+        if (!IS_NUMBER(indexVal)) {
+          runtimeError("Byte array index must be a number.");
+          return INTERPRET_RUNTIME_ERROR;
+        }
+        if (!IS_NUMBER(value)) {
+          runtimeError("Byte array value must be a number.");
+          return INTERPRET_RUNTIME_ERROR;
+        }
+        int index = (int)AS_NUMBER(indexVal);
+        ObjByteArray *array = AS_BYTE_ARRAY(receiver);
+        if (index < 0 || index >= array->count) {
+          runtimeError("Byte array index out of range.");
+          return INTERPRET_RUNTIME_ERROR;
+        }
+        array->bytes[index] = (uint8_t)AS_NUMBER(value);
+        pop(); pop(); pop();
+        push(value);
+      } else if (IS_MAP(receiver)) {
+        ObjString *key = mapKeyString(indexVal);
+        ObjMap *map = AS_MAP(receiver);
+        tableSet(&map->table, key, value);
+        pop(); pop(); pop();
+        push(value);
+      } else {
+        runtimeError("Can only index lists, byte arrays, and maps.");
         return INTERPRET_RUNTIME_ERROR;
       }
-      list->items[index] = value;
-      pop();
-      pop();
-      pop();
-      push(value);
       break;
     }
     }
