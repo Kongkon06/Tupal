@@ -1,0 +1,309 @@
+// Tupal 3D Raycaster Engine
+প্ৰকাশ "Tupal 3D Raycaster আৰম্ভ কৰা হৈছে...";
+
+চলক প্ৰস্থ = 320;
+চলক উচ্চতা = 200;
+চলক কলাম_প্ৰস্থ = 4; // Resolution scale (4 pixels wide columns)
+চলক মোট_কলাম = 80;   // 320 / 4 columns
+
+চলক fov = 1.047; // 60 degrees in radians
+
+// Map size 14x14 (196 elements)
+list ম্যাপ_ডাটা [
+  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+  1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+  1, 0, 2, 2, 0, 2, 2, 0, 0, 0, 0, 0, 0, 1,
+  1, 0, 2, 0, 0, 0, 2, 0, 0, 1, 1, 1, 0, 1,
+  1, 0, 2, 0, 0, 0, 2, 0, 0, 1, 0, 1, 0, 1,
+  1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1,
+  1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1,
+  1, 0, 2, 2, 0, 2, 2, 0, 0, 0, 0, 0, 0, 1,
+  1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+  1, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 0, 1,
+  1, 0, 1, 1, 1, 1, 1, 0, 0, 2, 0, 2, 0, 1,
+  1, 0, 1, 0, 0, 0, 1, 0, 0, 2, 0, 2, 0, 1,
+  1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
+];
+
+চলক প্লেয়াৰ_x = 5.5;
+চলক প্লেয়াৰ_y = 11.5;
+চলক প্লেয়াৰ_কোণ = -1.57; // Facing North
+
+চলক সফল = window_init(প্ৰস্থ, উচ্চতা, "Tupal 3D Raycaster Minimap");
+
+যদি (!সফল) {
+  প্ৰকাশ "Error: Window could not be initialized.";
+} নহলে {
+  চলক বাফাৰ = byte_array_new(প্ৰস্থ * উচ্চতা * 4);
+  চলক চলি_থাকিব = সঁচা;
+
+  যেতিয়া (চলি_থাকিব) {
+    // 1. Controls
+    চলক স্পীড = 0.08;
+    চলক ঘুৰণ_স্পীড = 0.06;
+
+    // Rotate left (A / Left arrow)
+    যদি (key_pressed(65) অথবা key_pressed(37)) {
+      প্লেয়াৰ_কোণ = প্লেয়াৰ_কোণ - ঘুৰণ_স্পীড;
+    }
+    // Rotate right (D / Right arrow)
+    যদি (key_pressed(68) অথবা key_pressed(39)) {
+      প্লেয়াৰ_কোণ = প্লেয়াৰ_কোণ + ঘুৰণ_স্পীড;
+    }
+
+    // Move forward (W / Up arrow)
+    যদি (key_pressed(87) অথবা key_pressed(38)) {
+      চলক dx = cos(প্লেয়াৰ_কোণ) * স্পীড;
+      চলক dy = sin(প্লেয়াৰ_কোণ) * স্পীড;
+      
+      // Collision check (simple wall sliding)
+      চলক nx = প্লেয়াৰ_x + dx;
+      চলক ny = প্লেয়াৰ_y + dy;
+      
+      চলক map_cell_x = ম্যাপ_ডাটা[floor(প্লেয়াৰ_y) * 14 + floor(nx)];
+      যদি (map_cell_x == 0) {
+        প্লেয়াৰ_x = nx;
+      }
+      চলক map_cell_y = ম্যাপ_ডাটা[floor(ny) * 14 + floor(প্লেয়াৰ_x)];
+      যদি (map_cell_y == 0) {
+        প্লেয়াৰ_y = ny;
+      }
+    }
+
+    // Move backward (S / Down arrow)
+    যদি (key_pressed(83) অথবা key_pressed(40)) {
+      চলক dx = cos(প্লেয়াৰ_কোণ) * স্পীড;
+      চলক dy = sin(প্লেয়াৰ_কোণ) * স্পীড;
+      
+      চলক nx = প্লেয়াৰ_x - dx;
+      চলক ny = প্লেয়াৰ_y - dy;
+      
+      চলক map_cell_x = ম্যাপ_ডাটা[floor(প্লেয়াৰ_y) * 14 + floor(nx)];
+      যদি (map_cell_x == 0) {
+        প্লেয়াৰ_x = nx;
+      }
+      চলক map_cell_y = ম্যাপ_ডাটা[floor(ny) * 14 + floor(প্লেয়াৰ_x)];
+      যদি (map_cell_y == 0) {
+        প্লেয়াৰ_y = ny;
+      }
+    }
+
+    // Escape to close
+    যদি (key_pressed(27)) {
+      চলি_থাকিব = মিছা;
+    }
+
+    // 2. 3D Raycasting Renderer
+    চলক col = 0;
+    যেতিয়া (col < মোট_কলাম) {
+      চলক কিৰণ_কোণ = প্লেয়াৰ_কোণ - (fov / 2.0) + (col / মোট_কলাম) * fov;
+      
+      চলক sin_a = sin(কিৰণ_কোণ);
+      চলক cos_a = cos(কিৰণ_কোণ);
+
+      চলক grid_x = floor(প্লেয়াৰ_x);
+      চলক grid_y = floor(প্লেয়াৰ_y);
+
+      চলক delta_dist_x = 1000000.0;
+      যদি (cos_a != 0.0) {
+        delta_dist_x = abs(1.0 / cos_a);
+      }
+      চলক delta_dist_y = 1000000.0;
+      যদি (sin_a != 0.0) {
+        delta_dist_y = abs(1.0 / sin_a);
+      }
+
+      চলক step_x = 0;
+      চলক side_dist_x = 0.0;
+      যদি (cos_a < 0.0) {
+        step_x = -1;
+        side_dist_x = (প্লেয়াৰ_x - grid_x) * delta_dist_x;
+      } নহলে {
+        step_x = 1;
+        side_dist_x = (grid_x + 1.0 - প্লেয়াৰ_x) * delta_dist_x;
+      }
+
+      চলক step_y = 0;
+      চলক side_dist_y = 0.0;
+      যদি (sin_a < 0.0) {
+        step_y = -1;
+        side_dist_y = (প্লেয়াৰ_y - grid_y) * delta_dist_y;
+      } নহলে {
+        step_y = 1;
+        side_dist_y = (grid_y + 1.0 - প্লেয়াৰ_y) * delta_dist_y;
+      }
+
+      চলক hit = 0;
+      চলক side = 0; // 0 for X, 1 for Y
+      চলক depth = 0;
+      
+      যেতিয়া (hit == 0 আৰু depth < 30) {
+        যদি (side_dist_x < side_dist_y) {
+          side_dist_x = side_dist_x + delta_dist_x;
+          grid_x = grid_x + step_x;
+          side = 0;
+        } নহলে {
+          side_dist_y = side_dist_y + delta_dist_y;
+          grid_y = grid_y + step_y;
+          side = 1;
+        }
+
+        যদি (grid_x >= 0 আৰু grid_x < 14 আৰু grid_y >= 0 আৰু grid_y < 14) {
+          চলক tile = ম্যাপ_ডাটা[grid_y * 14 + grid_x];
+          যদি (tile > 0) {
+            hit = tile;
+          }
+        } নহলে {
+          depth = 30; // Terminate
+        }
+        depth = depth + 1;
+      }
+
+      // Calculate perpendicular distance to wall (correct fisheye)
+      চলক লম্ব_দূৰত্ব = 0.0;
+      যদি (side == 0) {
+        লম্ব_দূৰত্ব = (grid_x - প্লেয়াৰ_x + (1.0 - step_x) / 2.0) / cos_a;
+      } নহলে {
+        লম্ব_দূৰত্ব = (grid_y - প্লেয়াৰ_y + (1.0 - step_y) / 2.0) / sin_a;
+      }
+      
+      যদি (লম্ব_দূৰত্ব < 0.01) {
+        লম্ব_দূৰত্ব = 0.01;
+      }
+
+      // Calculate heights and clipping
+      চলক স্লাইচ_উচ্চতা = floor(উচ্চতা / লম্ব_দূৰত্ব);
+      চলক ড্ৰ_আৰম্ভ = floor((উচ্চতা - স্লাইচ_উচ্চতা) / 2.0);
+      যদি (ড্ৰ_আৰম্ভ < 0) {
+        ড্ৰ_আৰম্ভ = 0;
+      }
+      চলক ড্ৰ_শেষ = floor((উচ্চতা + স্লাইচ_উচ্চতা) / 2.0);
+      যদি (ড্ৰ_শেষ >= উচ্চতা) {
+        ড্ৰ_শেষ = উচ্চতা - 1;
+      }
+
+      // Draw color selection
+      চলক r = 150;
+      চলক g = 150;
+      চলক b = 150;
+      
+      যদি (hit == 1) { // Wall type 1 (Red)
+        r = 180; g = 50; b = 50;
+      }
+      যদি (hit == 2) { // Wall type 2 (Green)
+        r = 50; g = 150; b = 50;
+      }
+
+      // Shading: render side walls darker
+      যদি (side == 1) {
+        r = floor(r * 0.6);
+        g = floor(g * 0.6);
+        b = floor(b * 0.6);
+      }
+
+      // Fill buffer columns
+      চলক y = 0;
+      যেতিয়া (y < 200) {
+        চলক pixel_color_r = 0;
+        চলক pixel_color_g = 0;
+        চলক pixel_color_b = 0;
+
+        যদি (y < ড্ৰ_আৰম্ভ) {
+          // Ceiling (Sky Blue)
+          pixel_color_r = 50;
+          pixel_color_g = 70;
+          pixel_color_b = 100;
+        } নহলে যদি (y <= ড্ৰ_শেষ) {
+          // Wall
+          pixel_color_r = r;
+          pixel_color_g = g;
+          pixel_color_b = b;
+        } নহলে {
+          // Floor (Dark Gray)
+          pixel_color_r = 40;
+          pixel_color_g = 40;
+          pixel_color_b = 40;
+        }
+
+        // Draw a column with width = কলাম_প্ৰস্থ
+        চলক dx = 0;
+        যেতিয়া (dx < কলাম_প্ৰস্থ) {
+          চলক px = col * কলাম_প্ৰস্থ + dx;
+          চলক offset = (y * (প্ৰস্থ) + px) * 4;
+          বাফাৰ[offset] = pixel_color_r;
+          বাফাৰ[offset+1] = pixel_color_g;
+          বাফাৰ[offset+2] = pixel_color_b;
+          বাফাৰ[offset+3] = 255;
+          dx = dx + 1;
+        }
+
+        y = y + 1;
+      }
+
+      col = col + 1;
+    }
+
+    // 3. Render Minimap
+    চলক ম্যাপ_আকাৰ = 14;
+    চলক টাইল_আকাৰ = 3;
+
+    চলক my = 0;
+    যেতিয়া (my < ম্যাপ_আকাৰ) {
+      চলক mx = 0;
+      যেতিয়া (mx < ম্যাপ_আকাৰ) {
+        চলক tile = ম্যাপ_ডাটা[my * 14 + mx];
+        
+        চলক mr = 0; চলক mg = 0; চলক mb = 0;
+        যদি (tile > 0) {
+          mr = 120; mg = 120; mb = 120; // Wall
+        } নহলে {
+          mr = 20; mg = 20; mb = 20;    // Empty
+        }
+
+        চলক ty = 0;
+        যেতিয়া (ty < টাইল_আকাৰ) {
+          চলক tx = 0;
+          যেতিয়া (tx < টাইল_আকাৰ) {
+            চলক px = 10 + mx * টাইল_আকাৰ + tx;
+            চলক py = 10 + my * টাইল_আকাৰ + ty;
+            চলক offset = (py * প্ৰস্থ + px) * 4;
+            বাফাৰ[offset] = mr;
+            বাফাৰ[offset+1] = mg;
+            বাফাৰ[offset+2] = mb;
+            বাফাৰ[offset+3] = 255;
+            tx = tx + 1;
+          }
+          ty = ty + 1;
+        }
+        mx = mx + 1;
+      }
+      my = my + 1;
+    }
+
+    // Draw player dot on minimap
+    চলক pmx = 10 + floor(প্লেয়াৰ_x * টাইল_আকাৰ);
+    চলক pmy = 10 + floor(প্লেয়াৰ_y * টাইল_আকাৰ);
+    
+    // Check boundaries for safety
+    যদি (pmx >= 0 আৰু pmx < প্ৰস্থ আৰু pmy >= 0 আৰু pmy < উচ্চতা) {
+      চলক poffset = (pmy * (প্ৰস্থ) + pmx) * 4;
+      বাফাৰ[poffset] = 255;   // Red dot for player
+      বাফাৰ[poffset+1] = 0;
+      বাফাৰ[poffset+2] = 0;
+      বাফাৰ[poffset+3] = 255;
+    }
+
+    // 4. Update Screen Window
+    চলক সফল_আপডেট = window_update(বাফাৰ);
+    যদি (!সফল_আপডেট) {
+      চলি_থাকিব = মিছা;
+    }
+
+    sleep(0.016); // Limit frame rate to 60 FPS
+  }
+
+  window_close();
+}
+
+প্ৰকাশ "বিদায়!";
