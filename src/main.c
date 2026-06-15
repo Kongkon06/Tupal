@@ -63,6 +63,7 @@ static void runFile(const char* path) {
 }
 
 int main(int argc, const char* argv[]) {
+  setvbuf(stdout, NULL, _IONBF, 0);
   initVM();
   if (argc == 1) {
     repl();

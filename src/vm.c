@@ -268,6 +268,56 @@ static Value byteArrayNewNative(int argCount, Value *args) {
   return OBJ_VAL(newByteArray(size));
 }
 
+static Value byteArraySizeNative(int argCount, Value *args) {
+  if (argCount != 1 || !IS_BYTE_ARRAY(args[0])) {
+    runtimeError("byte_array_size expects 1 byte array argument.");
+    return NIL_VAL;
+  }
+  return NUMBER_VAL(AS_BYTE_ARRAY(args[0])->count);
+}
+
+static Value byteArrayToStringNative(int argCount, Value *args) {
+  if (argCount != 3 || !IS_BYTE_ARRAY(args[0]) || !IS_NUMBER(args[1]) || !IS_NUMBER(args[2])) {
+    runtimeError("byte_array_to_string expects (array, start, length).");
+    return NIL_VAL;
+  }
+  ObjByteArray* array = AS_BYTE_ARRAY(args[0]);
+  int start = (int)AS_NUMBER(args[1]);
+  int len = (int)AS_NUMBER(args[2]);
+  if (start < 0 || start > array->count || len < 0 || start + len > array->count) {
+    runtimeError("byte_array_to_string index out of bounds.");
+    return NIL_VAL;
+  }
+  int actual_len = 0;
+  while (actual_len < len && array->bytes[start + actual_len] != '\0') {
+    actual_len++;
+  }
+  return OBJ_VAL(copyString((const char*)&array->bytes[start], actual_len));
+}
+
+static Value fileReadBytesNative(int argCount, Value *args) {
+  if (argCount != 1 || !IS_FILE(args[0])) {
+    runtimeError("file_read_bytes expects a file object");
+    return NIL_VAL;
+  }
+  ObjFile *fo = AS_FILE(args[0]);
+  FILE *f = fo->handle;
+  if (f == NULL)
+    return NIL_VAL;
+  fseek(f, 0, SEEK_END);
+  long len = ftell(f);
+  rewind(f);
+  if (len < 0) len = 0;
+  ObjByteArray *array = newByteArray((int)len);
+  push(OBJ_VAL(array));
+  size_t read = fread(array->bytes, 1, (size_t)len, f);
+  if (read < (size_t)len) {
+    array->count = (int)read;
+  }
+  pop();
+  return OBJ_VAL(array);
+}
+
 static Value mapNewNative(int argCount, Value *args) {
   return OBJ_VAL(newMap());
 }
@@ -431,6 +481,7 @@ void initVM()
 
   defineNative("খোল", openNative);
   defineNative("file_read", fileReadNative);
+  defineNative("file_read_bytes", fileReadBytesNative);
   defineNative("file_write", fileWriteNative);
   defineNative("file_close", fileCloseNative);
   defineNative("sleep", sleepNative);
@@ -451,6 +502,8 @@ void initVM()
   defineNative("str_len", strLenNative);
 
   defineNative("byte_array_new", byteArrayNewNative);
+  defineNative("byte_array_size", byteArraySizeNative);
+  defineNative("byte_array_to_string", byteArrayToStringNative);
 
   defineNative("map_new", mapNewNative);
   defineNative("map_keys", mapKeysNative);

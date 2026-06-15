@@ -102,8 +102,11 @@ ObjByteArray *newByteArray(int count)
 {
   ObjByteArray *array = ALLOCATE_OBJ(ObjByteArray, OBJ_BYTE_ARRAY);
   array->count = count;
+  array->bytes = NULL;
+  push(OBJ_VAL(array));
   array->bytes = ALLOCATE(uint8_t, count);
   memset(array->bytes, 0, count);
+  pop();
   return array;
 }
 

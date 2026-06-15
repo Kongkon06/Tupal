@@ -1,0 +1,1624 @@
+// Tupal Doom Engine
+প্ৰকাশ "Tupal Doom Engine আৰম্ভ কৰা হৈছে...";
+
+// Screen resolution
+চলক প্ৰস্থ = 800;
+চলক উচ্চতা = 500;
+
+// Math helpers
+চলক PI = 3.14159265;
+
+// Bitwise helper function to read 32-bit little-endian integer
+ফলন read32(bytes, offset) {
+  চলক b1 = bytes[offset];
+  চলক b2 = bytes[offset + 1];
+  চলক b3 = bytes[offset + 2];
+  চলক b4 = bytes[offset + 3];
+  ল b1 | (b2 << 8) | (b3 << 16) | (b4 << 24);
+}
+
+// Bitwise helper function to read 16-bit signed short
+ফলন read16s(bytes, offset) {
+  চলক b1 = bytes[offset];
+  চলক b2 = bytes[offset + 1];
+  চলক val = b1 | (b2 << 8);
+  যদি (val >= 32768) {
+    val = val - 65536;
+  }
+  ল val;
+}
+
+// Bitwise helper function to read 16-bit unsigned short
+ফলন read16u(bytes, offset) {
+  চলক b1 = bytes[offset];
+  চলক b2 = bytes[offset + 1];
+  ল b1 | (b2 << 8);
+}
+
+// Absolute value helper
+ফলন m_abs(val) {
+  যদি (val < 0) ল -val;
+  ল val;
+}
+
+// Min helper
+ফলন m_min(a, b) {
+  যদি (a < b) ল a;
+  ল b;
+}
+
+// Max helper
+ফলন m_max(a, b) {
+  যদি (a > b) ল a;
+  ল b;
+}
+
+// Open WAD file
+চলক ফাইল = খোল("doom/doom1.wad", "rb");
+যদি (ফাইল == নাই) {
+  প্ৰকাশ "Error: Could not open doom/doom1.wad. Please ensure the WAD file is in the doom/ folder.";
+} নহলে {
+  চলক বাফাৰ = file_read_bytes(ফাইল);
+  file_close(ফাইল);
+
+  চলক বাফাৰ_আকাৰ = byte_array_size(বাফাৰ);
+  প্ৰকাশ "WAD size (bytes):";
+  প্ৰকাশ বাফাৰ_আকাৰ;
+
+  // Header parsing
+  চলক টাইপ = byte_array_to_string(বাফাৰ, 0, 4);
+  প্ৰকাশ "WAD Format Type: " + টাইপ;
+
+  চলক numLumps = read32(বাফাৰ, 4);
+  চলক dirOffset = read32(বাফাৰ, 8);
+  প্ৰকাশ "Lumps count:";
+  প্ৰকাশ numLumps;
+
+  // Parse WAD Directory
+  list lump_offsets [];
+  list lump_sizes [];
+  list lump_names [];
+  চলক E1M1_idx = -1;
+
+  চলক i = 0;
+  যেতিয়া (i < numLumps) {
+    চলক entries_offset = dirOffset + i * 16;
+    চলক offset = read32(বাফাৰ, entries_offset);
+    চলক size = read32(বাফাৰ, entries_offset + 4);
+    চলক name = byte_array_to_string(বাফাৰ, entries_offset + 8, 8);
+
+    lump_offsets.push(offset);
+    lump_sizes.push(size);
+    lump_names.push(name);
+
+    যদি (name == "E1M1") {
+      E1M1_idx = i;
+    }
+    i = i + 1;
+  }
+
+  যদি (E1M1_idx == -1) {
+    প্ৰকাশ "Error: Level E1M1 lump not found in the WAD file.";
+  } নহলে {
+    প্ৰকাশ "Found level E1M1 at lump directory index:";
+    প্ৰকাশ E1M1_idx;
+
+    // Load geometry lumps
+    // Map data order in WAD:
+    // Header (E1M1) -> THINGS -> LINEDEFS -> SIDEDEFS -> VERTEXES -> SEGS -> SSECTORS -> NODES -> SECTORS
+    
+    // Parse VERTEXES (lump index E1M1_idx + 4)
+    চলক vx_offset = lump_offsets[E1M1_idx + 4];
+    চলক vx_size = lump_sizes[E1M1_idx + 4];
+    চলক num_vertices = floor(vx_size / 4);
+    list vx [];
+    list vy [];
+
+    চলক vi = 0;
+    যেতিয়া (vi < num_vertices) {
+      চলক offset = vx_offset + vi * 4;
+      vx.push(read16s(বাফাৰ, offset));
+      vy.push(read16s(বাফাৰ, offset + 2));
+      vi = vi + 1;
+    }
+    প্ৰকাশ "Loaded vertices:";
+    প্ৰকাশ num_vertices;
+
+    // Parse SECTORS (lump index E1M1_idx + 8)
+    চলক sec_offset = lump_offsets[E1M1_idx + 8];
+    চলক sec_size = lump_sizes[E1M1_idx + 8];
+    চলক num_sectors = floor(sec_size / 26);
+    list sec_floor [];
+    list sec_ceil [];
+    list sec_light [];
+
+    চলক seci = 0;
+    যেতিয়া (seci < num_sectors) {
+      চলক offset = sec_offset + seci * 26;
+      sec_floor.push(read16s(বাফাৰ, offset));
+      sec_ceil.push(read16s(বাফাৰ, offset + 2));
+      sec_light.push(read16s(বাফাৰ, offset + 20));
+      seci = seci + 1;
+    }
+    প্ৰকাশ "Loaded sectors:";
+    প্ৰকাশ num_sectors;
+
+    // Parse SIDEDEFS (lump index E1M1_idx + 3)
+    চলক side_offset = lump_offsets[E1M1_idx + 3];
+    চলক side_size = lump_sizes[E1M1_idx + 3];
+    চলক num_sidedefs = floor(side_size / 30);
+    list side_sector [];
+
+    চলক sidei = 0;
+    যেতিয়া (sidei < num_sidedefs) {
+      চলক offset = side_offset + sidei * 30;
+      side_sector.push(read16u(বাফাৰ, offset + 28)); // sector index is at offset 28
+      sidei = sidei + 1;
+    }
+    প্ৰকাশ "Loaded sidedefs:";
+    প্ৰকাশ num_sidedefs;
+
+    // Parse LINEDEFS (lump index E1M1_idx + 2)
+    চলক line_offset = lump_offsets[E1M1_idx + 2];
+    চলক line_size = lump_sizes[E1M1_idx + 2];
+    চলক num_linedefs = floor(line_size / 14);
+    list line_v1 [];
+    list line_v2 [];
+    list line_flags [];
+    list line_special [];
+    list line_s1 [];
+    list line_s2 [];
+
+    চলক linei = 0;
+    যেতিয়া (linei < num_linedefs) {
+      চলক offset = line_offset + linei * 14;
+      line_v1.push(read16u(বাফাৰ, offset));
+      line_v2.push(read16u(বাফাৰ, offset + 2));
+      line_flags.push(read16u(বাফাৰ, offset + 4));
+      line_special.push(read16u(বাফাৰ, offset + 6));
+      line_s1.push(read16u(বাফাৰ, offset + 10));
+      line_s2.push(read16u(বাফাৰ, offset + 12));
+      linei = linei + 1;
+    }
+    প্ৰকাশ "Loaded linedefs:";
+    প্ৰকাশ num_linedefs;
+
+    // Parse THINGS to locate Player 1 start and monsters/barrels (lump index E1M1_idx + 1)
+    চলক thing_offset = lump_offsets[E1M1_idx + 1];
+    চলক thing_size = lump_sizes[E1M1_idx + 1];
+    চলক num_things = floor(thing_size / 10);
+    
+    // Player start variables
+    চলক start_px = 0.0;
+    চলক start_py = 0.0;
+    চলক start_pa = 0.0;
+    চলক found_player = মিছা;
+
+    // Monsters and barrels list
+    list thing_x [];
+    list thing_y [];
+    list thing_type [];
+    list thing_hp [];
+    list thing_active [];
+    list monster_alerted [];
+    list monster_cooldown [];
+
+    চলক total_monsters = 0;
+    চলক total_pickups = 0;
+
+    চলক thingi = 0;
+    যেতিয়া (thingi < num_things) {
+      চলক offset = thing_offset + thingi * 10;
+      চলক tx = read16s(বাফাৰ, offset);
+      চলক ty = read16s(বাফাৰ, offset + 2);
+      চলক tangle = read16s(বাফাৰ, offset + 4);
+      চলক ttype = read16s(বাফাৰ, offset + 6);
+
+      যদি (ttype == 1) { // Player 1 start
+        start_px = tx * 1.0;
+        start_py = ty * 1.0;
+        start_pa = (tangle * PI) / 180.0;
+        found_player = সঁচা;
+      } নহলে {
+        চলক is_monster = (ttype == 3001 অথবা ttype == 3004 অথবা ttype == 9 অথবা ttype == 3002);
+        চলক is_barrel = (ttype == 2035);
+        চলক is_pickup = (ttype == 2011 অথবা ttype == 2012 অথবা ttype == 2019 অথবা ttype == 2014 অথবা ttype == 2015 অথবা ttype == 2018 অথবা ttype == 2007 অথবা ttype == 2048 অথবা ttype == 2008 অথবা ttype == 2049 অথবা ttype == 5 অথবা ttype == 6 অথবা ttype == 13);
+
+        যদি (is_monster অথবা is_barrel অথবা is_pickup) {
+          thing_x.push(tx * 1.0);
+          thing_y.push(ty * 1.0);
+          thing_type.push(ttype);
+          thing_active.push(সঁচা);
+          monster_alerted.push(মিছা);
+          monster_cooldown.push(0);
+          
+          চলক hp = 0;
+          যদি (is_monster) {
+            total_monsters = total_monsters + 1;
+            hp = 20;
+            যদি (ttype == 3001) hp = 60; // Imp
+            যদি (ttype == 3002) hp = 100; // Pinky Demon
+            যদি (ttype == 9) hp = 30; // Shotgun Guy
+          } নহলে যদি (is_barrel) {
+            hp = 20;
+          } নহলে যদি (is_pickup) {
+            total_pickups = total_pickups + 1;
+          }
+          thing_hp.push(hp);
+        }
+      }
+      thingi = thingi + 1;
+    }
+
+    যদি (found_player) {
+      প্ৰকাশ "Player 1 starts at (" + to_string(start_px) + ", " + to_string(start_py) + ") angle " + to_string(start_pa);
+    } নহলে {
+      start_px = 0.0;
+      start_py = 0.0;
+      start_pa = 0.0;
+      প্ৰকাশ "Warning: Player 1 start not found, using default (0, 0).";
+    }
+
+    প্ৰকাশ "Loaded interactive objects:";
+    প্ৰকাশ thing_x.size();
+    প্ৰকাশ "Total Monsters:";
+    প্ৰকাশ total_monsters;
+    প্ৰকাশ "Total Pickups:";
+    প্ৰকাশ total_pickups;
+
+    // Initialize Window
+    চলক win_ok = window_init(প্ৰস্থ, উচ্চতা, "Tupal Doom Engine - E1M1");
+    যদি (!win_ok) {
+      প্ৰকাশ "Error: Window could not be initialized.";
+    } নহলে {
+      চলক screen_buffer = byte_array_new(প্ৰস্থ * উচ্চতা * 4);
+      চলক running = সঁচা;
+      চলক automap_active = মিছা;
+      চলক automap_zoom = 0.04;
+
+      // Combat system variables
+      চলক player_hp = 100;
+      চলক player_ammo = 50;
+      চলক player_armor = 0;
+      চলক shoot_cooldown = 0;
+      চলক flash_timer = 0;
+      চলক hurt_flash_timer = 0;
+      চলক pickup_flash_timer = 0;
+
+      চলক px = start_px;
+      চলক py = start_py;
+      চলক pa = start_pa;
+      চলক player_h = 41.0;
+
+      চলক player_dead = মিছা;
+      চলক player_won = মিছা;
+      চলক start_time = ঘড়ী();
+      চলক monsters_killed = 0;
+      চলক pickups_collected = 0;
+      চলক hud_message = "";
+      চলক hud_message_timer = 0;
+      চলক needs_init = মিছা;
+
+      // Draw a line helper (Bresenham's)
+      ফলন drawLine(buf, x0, y0, x1, y1, r, g, b) {
+        চলক dx = m_abs(x1 - x0);
+        চলক dy = m_abs(y1 - y0);
+        চলক sx = 1; যদি (x0 > x1) sx = -1;
+        চলক sy = 1; যদি (y0 > y1) sy = -1;
+        চলক err = dx - dy;
+
+        চলক cx = x0;
+        চলক cy = y0;
+        চলক drawing = সঁচা;
+
+        যেতিয়া (drawing) {
+          যদি (cx >= 0 আৰু cx < প্ৰস্থ আৰু cy >= 0 আৰু cy < উচ্চতা) {
+            চলক offset = (cy * প্ৰস্থ + cx) * 4;
+            buf[offset] = r;
+            buf[offset + 1] = g;
+            buf[offset + 2] = b;
+            buf[offset + 3] = 255;
+          }
+
+          যদি (cx == x1 আৰু cy == y1) {
+            drawing = মিছা;
+          } নহলে {
+            চলক e2 = 2 * err;
+            যদি (e2 > -dy) {
+              err = err - dy;
+              cx = cx + sx;
+            }
+            যদি (e2 < dx) {
+              err = err + dx;
+              cy = cy + sy;
+            }
+          }
+        }
+      }
+
+      // Fast check if player can move there (collision segment distance check)
+      ফলন checkCollision(nx, ny) {
+        চলক collision = মিছা;
+        চলক ci = 0;
+        যেতিয়া (ci < num_linedefs আৰু !collision) {
+          // Check collision only with solid, one-sided walls
+          যদি (line_s2[ci] == 65535) {
+            চলক v1 = line_v1[ci];
+            চলক v2 = line_v2[ci];
+            চলক x1 = vx[v1];
+            চলক y1 = vy[v1];
+            চলক x2 = vx[v2];
+            চলক y2 = vy[v2];
+
+            // Point-to-segment distance squared
+            চলক l2 = (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
+            যদি (l2 > 0.0) {
+              চলক t = ((nx - x1) * (x2 - x1) + (ny - y1) * (y2 - y1)) / l2;
+              যদি (t < 0.0) t = 0.0;
+              যদি (t > 1.0) t = 1.0;
+
+              চলক proj_x = x1 + t * (x2 - x1);
+              চলক proj_y = y1 + t * (y2 - y1);
+              চলক dist_sq = (nx - proj_x) * (nx - proj_x) + (ny - proj_y) * (ny - proj_y);
+
+              যদি (dist_sq < 900.0) { // 30 units collision radius
+                collision = সঁচা;
+              }
+            }
+          }
+          ci = ci + 1;
+        }
+        ল !collision;
+      }
+
+      // Helper to draw a single 7-segment digit
+      ফলন drawDigit(buf, val, dx, dy, sz, r, g, b) {
+        // Segment 0: Top horiz
+        যদি (val == 0 অথবা val == 2 অথবা val == 3 অথবা val == 5 অথবা val == 6 অথবা val == 7 অথবা val == 8 অথবা val == 9) {
+          drawLine(buf, dx, dy, dx + sz, dy, r, g, b);
+        }
+        // Segment 1: Upper-left vert
+        যদি (val == 0 অথবা val == 4 অথবা val == 5 অথবা val == 6 অথবা val == 8 অথবা val == 9) {
+          drawLine(buf, dx, dy, dx, dy + sz, r, g, b);
+        }
+        // Segment 2: Upper-right vert
+        যদি (val == 0 অথবা val == 1 অথবা val == 2 অথবা val == 3 অথবা val == 4 অথবা val == 7 অথবা val == 8 অথবা val == 9) {
+          drawLine(buf, dx + sz, dy, dx + sz, dy + sz, r, g, b);
+        }
+        // Segment 3: Middle horiz
+        যদি (val == 2 অথবা val == 3 অথবা val == 4 অথবা val == 5 অথবা val == 6 অথবা val == 8 অথবা val == 9) {
+          drawLine(buf, dx, dy + sz, dx + sz, dy + sz, r, g, b);
+        }
+        // Segment 4: Lower-left vert
+        যদি (val == 0 অথবা val == 2 অথবা val == 6 অথবা val == 8) {
+          drawLine(buf, dx, dy + sz, dx, dy + sz * 2, r, g, b);
+        }
+        // Segment 5: Lower-right vert
+        যদি (val == 0 অথবা val == 1 অথবা val == 3 অথবা val == 4 অথবা val == 5 অথবা val == 6 অথবা val == 7 অথবা val == 8 অথবা val == 9) {
+          drawLine(buf, dx + sz, dy + sz, dx + sz, dy + sz * 2, r, g, b);
+        }
+        // Segment 6: Bottom horiz
+        যদি (val == 0 অথবা val == 2 অথবা val == 3 অথবা val == 5 অথবা val == 6 অথবা val == 8 অথবা val == 9) {
+          drawLine(buf, dx, dy + sz * 2, dx + sz, dy + sz * 2, r, g, b);
+        }
+      }
+
+      // Helper to draw a multi-digit number (up to 3 digits)
+      ফলন drawNumber(buf, num, x, y, sz, r, g, b) {
+        চলক temp = num;
+        যদি (temp < 0) temp = 0;
+        চলক d1 = floor(temp / 100);
+        temp = temp - d1 * 100;
+        চলক d2 = floor(temp / 10);
+        চলক d3 = temp - d2 * 10;
+
+        যদি (num >= 100) {
+          drawDigit(buf, d1, x, y, sz, r, g, b);
+        }
+        যদি (num >= 10) {
+          drawDigit(buf, d2, x + sz + 4, y, sz, r, g, b);
+        }
+        drawDigit(buf, d3, x + (sz + 4) * 2, y, sz, r, g, b);
+      }
+
+      // Helper to draw a single character
+      ফলন drawChar(buf, ch, x, y, sz, r, g, b) {
+        যদি (ch == "Y") {
+          drawLine(buf, x, y, x + floor(sz/2), y + floor(sz/2), r, g, b);
+          drawLine(buf, x + sz, y, x + floor(sz/2), y + floor(sz/2), r, g, b);
+          drawLine(buf, x + floor(sz/2), y + floor(sz/2), x + floor(sz/2), y + sz, r, g, b);
+        }
+        যদি (ch == "O") {
+          drawLine(buf, x, y, x + sz, y, r, g, b);
+          drawLine(buf, x, y + sz, x + sz, y + sz, r, g, b);
+          drawLine(buf, x, y, x, y + sz, r, g, b);
+          drawLine(buf, x + sz, y, x + sz, y + sz, r, g, b);
+        }
+        যদি (ch == "U") {
+          drawLine(buf, x, y, x, y + sz, r, g, b);
+          drawLine(buf, x + sz, y, x + sz, y + sz, r, g, b);
+          drawLine(buf, x, y + sz, x + sz, y + sz, r, g, b);
+        }
+        যদি (ch == "D") {
+          drawLine(buf, x, y, x, y + sz, r, g, b);
+          drawLine(buf, x, y, x + floor(sz * 0.7), y, r, g, b);
+          drawLine(buf, x, y + sz, x + floor(sz * 0.7), y + sz, r, g, b);
+          drawLine(buf, x + floor(sz * 0.7), y, x + sz, y + floor(sz/2), r, g, b);
+          drawLine(buf, x + floor(sz * 0.7), y + sz, x + sz, y + floor(sz/2), r, g, b);
+        }
+        যদি (ch == "I") {
+          drawLine(buf, x, y, x + sz, y, r, g, b);
+          drawLine(buf, x, y + sz, x + sz, y + sz, r, g, b);
+          drawLine(buf, x + floor(sz/2), y, x + floor(sz/2), y + sz, r, g, b);
+        }
+        যদি (ch == "E") {
+          drawLine(buf, x, y, x + sz, y, r, g, b);
+          drawLine(buf, x, y + floor(sz/2), x + floor(sz * 0.7), y + floor(sz/2), r, g, b);
+          drawLine(buf, x, y + sz, x + sz, y + sz, r, g, b);
+          drawLine(buf, x, y, x, y + sz, r, g, b);
+        }
+        যদি (ch == "R") {
+          drawLine(buf, x, y, x, y + sz, r, g, b);
+          drawLine(buf, x, y, x + sz, y, r, g, b);
+          drawLine(buf, x + sz, y, x + sz, y + floor(sz/2), r, g, b);
+          drawLine(buf, x, y + floor(sz/2), x + sz, y + floor(sz/2), r, g, b);
+          drawLine(buf, x, y + floor(sz/2), x + sz, y + sz, r, g, b);
+        }
+        যদি (ch == "S") {
+          drawLine(buf, x, y, x + sz, y, r, g, b);
+          drawLine(buf, x, y + floor(sz/2), x + sz, y + floor(sz/2), r, g, b);
+          drawLine(buf, x, y + sz, x + sz, y + sz, r, g, b);
+          drawLine(buf, x, y, x, y + floor(sz/2), r, g, b);
+          drawLine(buf, x + sz, y + floor(sz/2), x + sz, y + sz, r, g, b);
+        }
+        যদি (ch == "T") {
+          drawLine(buf, x, y, x + sz, y, r, g, b);
+          drawLine(buf, x + floor(sz/2), y, x + floor(sz/2), y + sz, r, g, b);
+        }
+        যদি (ch == "A") {
+          drawLine(buf, x, y + sz, x + floor(sz/2), y, r, g, b);
+          drawLine(buf, x + floor(sz/2), y, x + sz, y + sz, r, g, b);
+          drawLine(buf, x + floor(sz/4), y + floor(sz/2), x + floor(sz * 3/4), y + floor(sz/2), r, g, b);
+        }
+        যদি (ch == "C") {
+          drawLine(buf, x, y, x + sz, y, r, g, b);
+          drawLine(buf, x, y, x, y + sz, r, g, b);
+          drawLine(buf, x, y + sz, x + sz, y + sz, r, g, b);
+        }
+        যদি (ch == "G") {
+          drawLine(buf, x, y, x + sz, y, r, g, b);
+          drawLine(buf, x, y, x, y + sz, r, g, b);
+          drawLine(buf, x, y + sz, x + sz, y + sz, r, g, b);
+          drawLine(buf, x + sz, y + floor(sz/2), x + sz, y + sz, r, g, b);
+          drawLine(buf, x + floor(sz/2), y + floor(sz/2), x + sz, y + floor(sz/2), r, g, b);
+        }
+        যদি (ch == "M") {
+          drawLine(buf, x, y, x, y + sz, r, g, b);
+          drawLine(buf, x + sz, y, x + sz, y + sz, r, g, b);
+          drawLine(buf, x, y, x + floor(sz/2), y + floor(sz/2), r, g, b);
+          drawLine(buf, x + sz, y, x + floor(sz/2), y + floor(sz/2), r, g, b);
+        }
+        যদি (ch == "N") {
+          drawLine(buf, x, y, x, y + sz, r, g, b);
+          drawLine(buf, x + sz, y, x + sz, y + sz, r, g, b);
+          drawLine(buf, x, y, x + sz, y + sz, r, g, b);
+        }
+        যদি (ch == "P") {
+          drawLine(buf, x, y, x, y + sz, r, g, b);
+          drawLine(buf, x, y, x + sz, y, r, g, b);
+          drawLine(buf, x + sz, y, x + sz, y + floor(sz/2), r, g, b);
+          drawLine(buf, x, y + floor(sz/2), x + sz, y + floor(sz/2), r, g, b);
+        }
+        যদি (ch == "V") {
+          drawLine(buf, x, y, x + floor(sz/2), y + sz, r, g, b);
+          drawLine(buf, x + sz, y, x + floor(sz/2), y + sz, r, g, b);
+        }
+      }
+
+      // Helper to draw a string
+      ফলন drawString(buf, str, x, y, sz, r, g, b) {
+        চলক cx = x;
+        চলক len = str_len(str);
+        চলক ci = 0;
+        যেতিয়া (ci < len) {
+          চলক ch = char_at(str, ci);
+          যদি (ch != " ") {
+            drawChar(buf, ch, cx, y, sz, r, g, b);
+          }
+          cx = cx + sz + floor(sz / 2);
+          ci = ci + 1;
+        }
+      }
+
+      // Tab key debounce state
+      চলক tab_pressed_prev = মিছা;
+
+      // Game Loop
+      যেতিয়া (running) {
+        // --- 0. RESTART INITIALIZATION ---
+        যদি (needs_init) {
+          player_hp = 100;
+          player_ammo = 50;
+          player_armor = 0;
+          px = start_px;
+          py = start_py;
+          pa = start_pa;
+          player_h = 41.0;
+          player_dead = মিছা;
+          player_won = মিছা;
+          start_time = ঘড়ী();
+          monsters_killed = 0;
+          pickups_collected = 0;
+          hud_message = "WELCOME TO E1M1";
+          hud_message_timer = 90;
+
+          চলক ti = 0;
+          যেতিয়া (ti < thing_x.size()) {
+            thing_active[ti] = সঁচা;
+            
+            চলক ttype = thing_type[ti];
+            চলক is_monster = (ttype == 3001 অথবা ttype == 3004 অথবা ttype == 9 অথবা ttype == 3002);
+            চলক is_barrel = (ttype == 2035);
+            চলক hp = 0;
+            যদি (is_monster) {
+              hp = 20;
+              যদি (ttype == 3001) hp = 60;
+              যদি (ttype == 3002) hp = 100;
+              যদি (ttype == 9) hp = 30;
+            } নহলে যদি (is_barrel) {
+              hp = 20;
+            }
+            thing_hp[ti] = hp;
+            monster_alerted[ti] = মিছা;
+            monster_cooldown[ti] = 0;
+            ti = ti + 1;
+          }
+          needs_init = মিছা;
+        }
+
+        // --- 1. UPDATE TIMERS ---
+        যদি (shoot_cooldown > 0) shoot_cooldown = shoot_cooldown - 1;
+        যদি (flash_timer > 0) flash_timer = flash_timer - 1;
+        যদি (hurt_flash_timer > 0) hurt_flash_timer = hurt_flash_timer - 1;
+        যদি (pickup_flash_timer > 0) pickup_flash_timer = pickup_flash_timer - 1;
+        যদি (hud_message_timer > 0) hud_message_timer = hud_message_timer - 1;
+
+        // --- 2. HANDLE CONTROLS ---
+        যদি (player_dead) {
+          যদি (key_pressed(82)) { // R key to restart
+            needs_init = সঁচা;
+          }
+          যদি (key_pressed(27)) { // ESC to exit
+            running = মিছা;
+          }
+        } নহলে যদি (player_won) {
+          যদি (key_pressed(82)) { // R key to restart
+            needs_init = সঁচা;
+          }
+          যদি (key_pressed(27)) { // ESC to exit
+            running = মিছা;
+          }
+        } নহলে {
+          চলক move_speed = 30.0;
+          চলক turn_speed = 0.05;
+
+          // Turn left / right (Arrow keys: Left 37, Right 39)
+          যদি (key_pressed(37)) {
+            pa = pa + turn_speed;
+          }
+          যদি (key_pressed(39)) {
+            pa = pa - turn_speed;
+          }
+
+          // Walk Forward / Backward (W 87 / S 83, Up 38 / Down 40)
+          চলক dx = cos(pa) * move_speed;
+          চলক dy = sin(pa) * move_speed;
+          
+          যদি (key_pressed(87) অথবা key_pressed(38)) { // Forward
+            চলক target_x = px + dx;
+            চলক target_y = py + dy;
+            যদি (checkCollision(target_x, target_y)) {
+              px = target_x;
+              py = target_y;
+            } নহলে যদি (checkCollision(target_x, py)) {
+              px = target_x;
+            } নহলে যদি (checkCollision(px, target_y)) {
+              py = target_y;
+            }
+          }
+          যদি (key_pressed(83) অথবা key_pressed(40)) { // Backward
+            চলক target_x = px - dx;
+            চলক target_y = py - dy;
+            যদি (checkCollision(target_x, target_y)) {
+              px = target_x;
+              py = target_y;
+            } নহলে যদি (checkCollision(target_x, py)) {
+              px = target_x;
+            } নহলে যদি (checkCollision(px, target_y)) {
+              py = target_y;
+            }
+          }
+
+          // Strafe Left / Right (A 65 / D 68)
+          চলক strafe_dx = -sin(pa) * move_speed;
+          চলক strafe_dy = cos(pa) * move_speed;
+          যদি (key_pressed(65)) { // Strafe Left
+            চলক target_x = px - strafe_dx;
+            চলক target_y = py - strafe_dy;
+            যদি (checkCollision(target_x, target_y)) {
+              px = target_x;
+              py = target_y;
+            }
+          }
+          যদি (key_pressed(68)) { // Strafe Right
+            চলক target_x = px + strafe_dx;
+            চলক target_y = py + strafe_dy;
+            যদি (checkCollision(target_x, target_y)) {
+              px = target_x;
+              py = target_y;
+            }
+          }
+
+          // Shooting (Spacebar 32)
+          যদি (key_pressed(32) আৰু shoot_cooldown == 0 আৰু player_ammo > 0) {
+            player_ammo = player_ammo - 1;
+            shoot_cooldown = 12; // shooting speed limitation
+            flash_timer = 4;    // muzzle flash visual duration
+
+            // Wake up monsters nearby with noise
+            চলক nti = 0;
+            যেতিয়া (nti < thing_x.size()) {
+              যদি (thing_active[nti]) {
+                চলক ndx = thing_x[nti] - px;
+                চলক ndy = thing_y[nti] - py;
+                যদি (ndx * ndx + ndy * ndy < 1440000.0) { // 1200 units radius
+                  monster_alerted[nti] = সঁচা;
+                }
+              }
+              nti = nti + 1;
+            }
+
+            // Raycast shooting hit detection
+            চলক closest_idx = -1;
+            চলক closest_dist = 100000000.0;
+            
+            চলক ti = 0;
+            যেতিয়া (ti < thing_x.size()) {
+              যদি (thing_active[ti]) {
+                চলক ttype = thing_type[ti];
+                চলক is_pickup = (ttype == 2011 অথবা ttype == 2012 অথবা ttype == 2019 অথবা ttype == 2014 অথবা ttype == 2015 অথবা ttype == 2018 অথবা ttype == 2007 অথবা ttype == 2048 অথবা ttype == 2008 অথবা ttype == 2049 অথবা ttype == 5 অথবা ttype == 6 অথবা ttype == 13);
+                
+                যদি (!is_pickup) {
+                  চলক tx = thing_x[ti];
+                  চলক ty = thing_y[ti];
+
+                  চলক t_dx = tx - px;
+                  চলক t_dy = ty - py;
+                  
+                  চলক angle_to_thing = atan2(t_dy, t_dx);
+                  চলক diff = angle_to_thing - pa;
+                  
+                  // Normalize angle difference to [-PI, PI]
+                  যেতিয়া (diff < -PI) diff = diff + PI * 2;
+                  যেতিয়া (diff > PI) diff = diff - PI * 2;
+
+                  // Check if within narrow target cone (around 7 degrees)
+                  যদি (m_abs(diff) < 0.12) {
+                    চলক dist = t_dx * t_dx + t_dy * t_dy;
+                    যদি (dist < closest_dist) {
+                      closest_dist = dist;
+                      closest_idx = ti;
+                    }
+                  }
+                }
+              }
+              ti = ti + 1;
+            }
+
+            // Deal damage if hit
+            যদি (closest_idx != -1) {
+              চলক hp = thing_hp[closest_idx] - 25; // 25 damage per hit
+              thing_hp[closest_idx] = hp;
+              
+              প্ৰকাশ "Hit entity at index:";
+              প্ৰকাশ closest_idx;
+              প্ৰকাশ "New HP:";
+              প্ৰকাশ hp;
+
+              যদি (hp <= 0) {
+                thing_active[closest_idx] = মিছা;
+                প্ৰকাশ "Defeated entity!";
+
+                চলক ctype = thing_type[closest_idx];
+                চলক is_mon = (ctype == 3001 অথবা ctype == 3004 অথবা ctype == 9 অথবা ctype == 3002);
+                যদি (is_mon) {
+                  monsters_killed = monsters_killed + 1;
+                }
+
+                // Barrel explosion damage logic
+                যদি (ctype == 2035) {
+                  প্ৰকাশ "Barrel exploded! Blast damage dealt!";
+                  চলক bi = 0;
+                  যেতিয়া (bi < thing_x.size()) {
+                    যদি (thing_active[bi] আৰু bi != closest_idx) {
+                      চলক bx = thing_x[bi];
+                      চলক by = thing_y[bi];
+                      চলক tx = thing_x[closest_idx];
+                      চলক ty = thing_y[closest_idx];
+                      
+                      চলক blast_dist_sq = (bx - tx) * (bx - tx) + (by - ty) * (by - ty);
+                      যদি (blast_dist_sq < 22500.0) { // 150 units radius (150^2)
+                        thing_hp[bi] = thing_hp[bi] - 80;
+                        যদি (thing_hp[bi] <= 0) {
+                          thing_active[bi] = মিছা;
+                          প্ৰকাশ "Chain explosion defeated entity!";
+                          চলক bctype = thing_type[bi];
+                          চলক bis_mon = (bctype == 3001 অথবা bctype == 3004 অথবা bctype == 9 অথবা bctype == 3002);
+                          যদি (bis_mon) {
+                            monsters_killed = monsters_killed + 1;
+                          }
+                        }
+                      }
+                    }
+                    bi = bi + 1;
+                  }
+                }
+              }
+            }
+          }
+
+          // Pickup items check
+          চলক pti = 0;
+          যেতিয়া (pti < thing_x.size()) {
+            যদি (thing_active[pti]) {
+              চলক ttype = thing_type[pti];
+              চলক is_pickup = (ttype == 2011 অথবা ttype == 2012 অথবা ttype == 2019 অথবা ttype == 2014 অথবা ttype == 2015 অথবা ttype == 2018 অথবা ttype == 2007 অথবা ttype == 2048 অথবা ttype == 2008 অথবা ttype == 2049 অথবা ttype == 5 অথবা ttype == 6 অথবা ttype == 13);
+              
+              যদি (is_pickup) {
+                চলক tx = thing_x[pti];
+                চলক ty = thing_y[pti];
+                চলক dist_sq = (tx - px) * (tx - px) + (ty - py) * (ty - py);
+                
+                যদি (dist_sq < 1600.0) { // 40 units radius
+                  চলক picked = মিছা;
+                  
+                  // Health items
+                  যদি (ttype == 2011) { // Stimpack
+                    যদি (player_hp < 100) {
+                      player_hp = m_min(100, player_hp + 10);
+                      picked = সঁচা;
+                      hud_message = "PICKED UP A STIMPACK";
+                    }
+                  }
+                  যদি (ttype == 2012) { // Medikit
+                    যদি (player_hp < 100) {
+                      player_hp = m_min(100, player_hp + 25);
+                      picked = সঁচা;
+                      hud_message = "PICKED UP A MEDIKIT";
+                    }
+                  }
+                  যদি (ttype == 2019) { // Health bonus
+                    যদি (player_hp < 200) {
+                      player_hp = m_min(200, player_hp + 2);
+                      picked = সঁচা;
+                      hud_message = "PICKED UP A HEALTH BONUS";
+                    }
+                  }
+                  
+                  // Armor items
+                  যদি (ttype == 2014) { // Green armor
+                    যদি (player_armor < 100) {
+                      player_armor = m_max(player_armor, 100);
+                      picked = সঁচা;
+                      hud_message = "PICKED UP GREEN ARMOR";
+                    }
+                  }
+                  যদি (ttype == 2015) { // Blue armor
+                    যদি (player_armor < 200) {
+                      player_armor = m_max(player_armor, 200);
+                      picked = সঁচা;
+                      hud_message = "PICKED UP BLUE ARMOR";
+                    }
+                  }
+                  যদি (ttype == 2018) { // Armor bonus
+                    যদি (player_armor < 200) {
+                      player_armor = m_min(200, player_armor + 2);
+                      picked = সঁচা;
+                      hud_message = "PICKED UP AN ARMOR BONUS";
+                    }
+                  }
+                  
+                  // Ammo items
+                  যদি (ttype == 2007 অথবা ttype == 2048) { // Clip / Box of ammo
+                    যদি (player_ammo < 200) {
+                      চলক amt = 10; যদি (ttype == 2048) amt = 50;
+                      player_ammo = m_min(200, player_ammo + amt);
+                      picked = সঁচা;
+                      hud_message = "PICKED UP AMMO";
+                    }
+                  }
+                  
+                  // Keys
+                  যদি (ttype == 5) { // Blue key
+                    picked = সঁচা;
+                    hud_message = "PICKED UP BLUE KEYCARD";
+                  }
+                  যদি (ttype == 6) { // Yellow key
+                    picked = সঁচা;
+                    hud_message = "PICKED UP YELLOW KEYCARD";
+                  }
+                  যদি (ttype == 13) { // Red key
+                    picked = সঁচা;
+                    hud_message = "PICKED UP RED KEYCARD";
+                  }
+                  
+                  যদি (picked) {
+                    thing_active[pti] = মিছা;
+                    pickups_collected = pickups_collected + 1;
+                    pickup_flash_timer = 4;
+                    hud_message_timer = 90;
+                  }
+                }
+              }
+            }
+            pti = pti + 1;
+          }
+
+          // Exit linedef switch checking
+          চলক li = 0;
+          যেতিয়া (li < num_linedefs আৰু !player_won) {
+            চলক lspec = line_special[li];
+            যদি (lspec == 11 অথবা lspec == 52) {
+              চলক v1 = line_v1[li];
+              চলক v2 = line_v2[li];
+              চলক x1 = vx[v1];
+              চলক y1 = vy[v1];
+              চলক x2 = vx[v2];
+              চলক y2 = vy[v2];
+              
+              চলক l2 = (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
+              যদি (l2 > 0.0) {
+                চলক t = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / l2;
+                যদি (t < 0.0) t = 0.0;
+                যদি (t > 1.0) t = 1.0;
+                চলক proj_x = x1 + t * (x2 - x1);
+                চলক proj_y = y1 + t * (y2 - y1);
+                চলক dist_sq = (px - proj_x) * (px - proj_x) + (py - proj_y) * (py - proj_y);
+                
+                যদি (dist_sq < 3600.0) { // 60 units radius
+                  যদি (lspec == 52) { // Walkover exit
+                    player_won = সঁচা;
+                    start_time = ঘড়ী() - start_time;
+                  } নহলে যদি (lspec == 11 আৰু (key_pressed(32) অথবা key_pressed(69))) { // Switch exit on Space/E
+                    player_won = সঁচা;
+                    start_time = ঘড়ী() - start_time;
+                  }
+                }
+              }
+            }
+            li = li + 1;
+          }
+
+          // Monster AI behavior
+          চলক mti = 0;
+          যেতিয়া (mti < thing_x.size() আৰু !player_dead আৰু !player_won) {
+            যদি (thing_active[mti]) {
+              চলক ttype = thing_type[mti];
+              চলক is_monster = (ttype == 3001 অথবা ttype == 3004 অথবা ttype == 9 অথবা ttype == 3002);
+              
+              যদি (is_monster) {
+                চলক tx = thing_x[mti];
+                চলক ty = thing_y[mti];
+                
+                চলক mdx = px - tx;
+                চলক mdy = py - ty;
+                চলক mdist = sqrt(mdx * mdx + mdy * mdy);
+                
+                // Wake up monster if close or if player shot
+                যদি (mdist < 600.0 অথবা (flash_timer > 0 আৰু mdist < 1200.0)) {
+                  monster_alerted[mti] = সঁচা;
+                }
+                
+                যদি (monster_alerted[mti]) {
+                  // Move towards player
+                  যদি (mdist > 60.0) {
+                    চলক speed = 4.5;
+                    যদি (ttype == 3002) speed = 8.0; // Pinky is fast!
+                    
+                    চলক nx = tx + (mdx / mdist) * speed;
+                    চলক ny = ty + (mdy / mdist) * speed;
+                    
+                    যদি (checkCollision(nx, ny)) {
+                      thing_x[mti] = nx;
+                      thing_y[mti] = ny;
+                    }
+                  }
+                  
+                  // Attack player
+                  যদি (monster_cooldown[mti] > 0) {
+                    monster_cooldown[mti] = monster_cooldown[mti] - 1;
+                  } নহলে {
+                    চলক deal_dmg = মিছা;
+                    চলক dmg = 0;
+                    
+                    যদি (ttype == 3002) { // Pinky (melee)
+                      যদি (mdist < 80.0) {
+                        deal_dmg = সঁচা;
+                        dmg = 12;
+                        monster_cooldown[mti] = 30; // attacks rapidly
+                      }
+                    } নহলে { // Sergeant, Trooper, Imp (ranged)
+                      যদি (mdist < 700.0) {
+                        deal_dmg = সঁচা;
+                        dmg = 5; // Trooper
+                        যদি (ttype == 9) dmg = 10; // Sergeant
+                        যদি (ttype == 3001) dmg = 8; // Imp
+                        
+                        monster_cooldown[mti] = 50 + floor(clock() * 10) % 20; // random cooldown
+                      }
+                    }
+                    
+                    যদি (deal_dmg) {
+                      // Apply armor absorption (33%)
+                      চলক armor_absorb = floor(dmg * 0.33);
+                      যদি (player_armor > 0) {
+                        যদি (player_armor < armor_absorb) armor_absorb = player_armor;
+                        player_armor = player_armor - armor_absorb;
+                        player_hp = player_hp - (dmg - armor_absorb);
+                      } নহলে {
+                        player_hp = player_hp - dmg;
+                      }
+                      
+                      যদি (player_hp <= 0) {
+                        player_hp = 0;
+                        player_dead = সঁচা;
+                      }
+                      
+                      hurt_flash_timer = 5;
+                    }
+                  }
+                }
+              }
+            }
+            mti = mti + 1;
+          }
+        }
+
+        // Toggle Automap (TAB 9)
+        চলক tab_pressed = key_pressed(9);
+        যদি (tab_pressed আৰু !tab_pressed_prev) {
+          automap_active = !automap_active;
+        }
+        tab_pressed_prev = tab_pressed;
+
+        // Escape to exit (ESC 27)
+        যদি (key_pressed(27)) {
+          running = মিছা;
+        }
+
+        // --- 3. RENDER THE SCREEN ---
+        যদি (automap_active) {
+          // Clear Screen to Dark Blue/Black
+          চলক offset = 0;
+          যেতিয়া (offset < প্ৰস্থ * উচ্চতা * 4) {
+            screen_buffer[offset] = 10;
+            screen_buffer[offset + 1] = 10;
+            screen_buffer[offset + 2] = 20;
+            screen_buffer[offset + 3] = 255;
+            offset = offset + 4;
+          }
+          
+          // Draw Linedefs in 2D
+          চলক li = 0;
+          যেতিয়া (li < num_linedefs) {
+            চলক v1 = line_v1[li];
+            চলক v2 = line_v2[li];
+            
+            // Player-centered coordinates
+            চলক dx1 = (vx[v1] - px) * automap_zoom;
+            চলক dy1 = (vy[v1] - py) * automap_zoom;
+            চলক dx2 = (vx[v2] - px) * automap_zoom;
+            চলক dy2 = (vy[v2] - py) * automap_zoom;
+
+            // Screen coords (Doom Y is up, screen Y is down)
+            চলক sx1 = floor(160.0 + dx1);
+            চলক sy1 = floor(100.0 - dy1);
+            চলক sx2 = floor(160.0 + dx2);
+            চলক sy2 = floor(100.0 - dy2);
+
+            // Color-code the lines
+            চলক r = 100; চলক g = 100; চলক b = 100;
+            যদি (line_s2[li] == 65535) {
+              r = 220; g = 50; b = 50; // Solid walls = Red
+            } নহলে {
+              r = 80; g = 150; b = 80; // Portals = Green
+            }
+
+            drawLine(screen_buffer, sx1, sy1, sx2, sy2, r, g, b);
+            li = li + 1;
+          }
+
+          // Draw active monsters/barrels on automap
+          চলক ti = 0;
+          যেতিয়া (ti < thing_x.size()) {
+            যদি (thing_active[ti]) {
+              চলক tx = thing_x[ti];
+              চলক ty = thing_y[ti];
+              চলক ttype = thing_type[ti];
+
+              চলক dx1 = (tx - px) * automap_zoom;
+              চলক dy1 = (ty - py) * automap_zoom;
+
+              চলক sx1 = floor(160.0 + dx1);
+              চলক sy1 = floor(100.0 - dy1);
+
+              যদি (sx1 >= 0 আৰু sx1 < 320 আৰু sy1 >= 0 আৰু sy1 < 200) {
+                চলক offset = (sy1 * প্ৰস্থ + sx1) * 4;
+                চলক r = 220; চলক g = 120; চলক b = 30; // Monsters = Orange
+                যদি (ttype == 2035) {
+                  r = 50; g = 220; b = 50; // Barrels = Green
+                }
+                screen_buffer[offset] = r;
+                screen_buffer[offset + 1] = g;
+                screen_buffer[offset + 2] = b;
+                screen_buffer[offset + 3] = 255;
+                
+                যদি (sx1 + 1 < 320) {
+                  চলক offset2 = offset + 4;
+                  screen_buffer[offset2] = r;
+                  screen_buffer[offset2 + 1] = g;
+                  screen_buffer[offset2 + 2] = b;
+                  screen_buffer[offset2 + 3] = 255;
+                }
+              }
+            }
+            ti = ti + 1;
+          }
+
+          // Draw Player Arrow
+          চলক cos_p = cos(pa);
+          চলক sin_p = sin(pa);
+
+          চলক p1_x = floor(160.0 + cos_p * 8.0);
+          চলক p1_y = floor(100.0 - sin_p * 8.0);
+          চলক p2_x = floor(160.0 + cos(pa + 2.5) * 5.0);
+          চলক p2_y = floor(100.0 - sin(pa + 2.5) * 5.0);
+          চলক p3_x = floor(160.0 + cos(pa - 2.5) * 5.0);
+          চলক p3_y = floor(100.0 - sin(pa - 2.5) * 5.0);
+
+          drawLine(screen_buffer, p1_x, p1_y, p2_x, p2_y, 255, 200, 0);
+          drawLine(screen_buffer, p2_x, p2_y, p3_x, p3_y, 255, 200, 0);
+          drawLine(screen_buffer, p3_x, p3_y, p1_x, p1_y, 255, 200, 0);
+
+          // Draw Shooting ray line if muzzle flash is active
+          যদি (flash_timer > 0) {
+            drawLine(screen_buffer, 160, 100, 160 + floor(cos_p * 35.0), 100 - floor(sin_p * 35.0), 255, 255, 100);
+          }
+
+        } নহলে {
+          // 3D FIRST-PERSON VIEW
+          
+          // Clear buffer (Ceiling top half, Floor bottom half)
+          চলক ceil_r = 30; চলক ceil_g = 35; চলক ceil_b = 50;
+          চলক floor_r = 25; চলক floor_g = 25; চলক floor_b = 25;
+
+          যদি (hurt_flash_timer > 0) {
+            ceil_r = 90; ceil_g = 15; ceil_b = 15;
+            floor_r = 80; floor_g = 10; floor_b = 10;
+          } নহলে যদি (pickup_flash_timer > 0) {
+            ceil_r = 15; ceil_g = 80; ceil_b = 15;
+            floor_r = 10; floor_g = 70; floor_b = 10;
+          }
+
+          চলক col = 0;
+          যেতিয়া (col < প্ৰস্থ) {
+            চলক y = 0;
+            যেতিয়া (y < 100) {
+              // Ceiling: Dark Slate Blue
+              চলক offset1 = (y * প্ৰস্থ + col) * 4;
+              screen_buffer[offset1] = ceil_r;
+              screen_buffer[offset1 + 1] = ceil_g;
+              screen_buffer[offset1 + 2] = ceil_b;
+              screen_buffer[offset1 + 3] = 255;
+
+              // Floor: Dark Charcoal Grey
+              চলক offset2 = ((199 - y) * প্ৰস্থ + col) * 4;
+              screen_buffer[offset2] = floor_r;
+              screen_buffer[offset2 + 1] = floor_g;
+              screen_buffer[offset2 + 2] = floor_b;
+              screen_buffer[offset2 + 3] = 255;
+
+              y = y + 1;
+            }
+            col = col + 1;
+          }
+
+          // Determine current player floor height
+          চলক nearest_sec = 0;
+          চলক nearest_dist = 100000000.0;
+          চলক vi = 0;
+          যেতিয়া (vi < num_vertices) {
+            চলক dx_v = vx[vi] - px;
+            চলক dy_v = vy[vi] - py;
+            চলক dist = dx_v * dx_v + dy_v * dy_v;
+            যদি (dist < nearest_dist) {
+              চলক found_sec = -1;
+              চলক li = 0;
+              যেতিয়া (li < num_linedefs আৰু found_sec == -1) {
+                যদি (line_v1[li] == vi অথবা line_v2[li] == vi) {
+                  found_sec = side_sector[line_s1[li]];
+                }
+                li = li + 1;
+              }
+              যদি (found_sec != -1) {
+                nearest_sec = found_sec;
+                nearest_dist = dist;
+              }
+            }
+            vi = vi + 1;
+          }
+          
+          চলক target_h = sec_floor[nearest_sec] + 41.0;
+          যদি (player_dead) {
+            target_h = sec_floor[nearest_sec] + 8.0;
+          }
+          player_h = player_h + (target_h - player_h) * 0.15;
+
+          // Filter and collect active linedefs and sprites in view distance
+          list active_idx [];
+          list active_depth [];
+
+          // Collect visible walls
+          চলক li = 0;
+          যেতিয়া (li < num_linedefs) {
+            চলক v1 = line_v1[li];
+            চলক v2 = line_v2[li];
+
+            চলক dx1 = vx[v1] - px;
+            চলক dy1 = vy[v1] - py;
+            চলক dx2 = vx[v2] - px;
+            চলক dy2 = vy[v2] - py;
+
+            চলক max_dist = 1600.0;
+            চলক dist1 = dx1 * dx1 + dy1 * dy1;
+            চলক dist2 = dx2 * dx2 + dy2 * dy2;
+
+            যদি (dist1 < max_dist * max_dist অথবা dist2 < max_dist * max_dist) {
+              চলক cos_a = cos(-pa);
+              চলক sin_a = sin(-pa);
+
+              চলক ry1 = dx1 * sin_a + dy1 * cos_a;
+              চলক ry2 = dx2 * sin_a + dy2 * cos_a;
+
+              যদি (ry1 > 10.0 অথবা ry2 > 10.0) {
+                active_idx.push(li);
+                active_depth.push((ry1 + ry2) / 2.0);
+              }
+            }
+            li = li + 1;
+          }
+
+          // Collect active sprite entities
+          চলক ti = 0;
+          যেতিয়া (ti < thing_x.size()) {
+            যদি (thing_active[ti]) {
+              চলক tx = thing_x[ti];
+              চলক ty = thing_y[ti];
+              
+              চলক dx = tx - px;
+              চলক dy = ty - py;
+              
+              চলক cos_a = cos(-pa);
+              চলক sin_a = sin(-pa);
+              
+              চলক ry = dx * sin_a + dy * cos_a;
+              
+              যদি (ry > 10.0 আৰু ry < 1600.0) {
+                active_idx.push(10000 + ti);
+                active_depth.push(ry);
+              }
+            }
+            ti = ti + 1;
+          }
+
+          // Sort active entities by depth descending (Painter's Algorithm)
+          চলক n_active = active_idx.size();
+          চলক j = 1;
+          যেতিয়া (j < n_active) {
+            চলক key_idx = active_idx[j];
+            চলক key_depth = active_depth[j];
+            চলক k = j - 1;
+            যেতিয়া (k >= 0 আৰু active_depth[k] < key_depth) {
+              active_idx[k + 1] = active_idx[k];
+              active_depth[k + 1] = active_depth[k];
+              k = k - 1;
+            }
+            active_idx[k + 1] = key_idx;
+            active_depth[k + 1] = key_depth;
+            j = j + 1;
+          }
+
+          // Render sorted walls and sprites in correct depth order
+          চলক scale = 160.0;
+          চলক wi = 0;
+          যেতিয়া (wi < n_active) {
+            চলক l_idx = active_idx[wi];
+            
+            যদি (l_idx < 10000) {
+              // --- WALL RENDER ---
+              চলক v1 = line_v1[l_idx];
+              চলক v2 = line_v2[l_idx];
+
+              চলক dx1 = vx[v1] - px;
+              চলক dy1 = vy[v1] - py;
+              চলক dx2 = vx[v2] - px;
+              চলক dy2 = vy[v2] - py;
+
+              চলক cos_a = cos(-pa);
+              চলক sin_a = sin(-pa);
+
+              চলক rx1 = dx1 * cos_a - dy1 * sin_a;
+              চলক ry1 = dx1 * sin_a + dy1 * cos_a;
+              চলক rx2 = dx2 * cos_a - dy2 * sin_a;
+              চলক ry2 = dx2 * sin_a + dy2 * cos_a;
+
+              চলক near = 10.0;
+              চলক clipped = মিছা;
+
+              যদি (ry1 < near আৰু ry2 < near) {
+                clipped = সঁচা;
+              } নহলে {
+                যদি (ry1 < near) {
+                  চলক t = (near - ry1) / (ry2 - ry1);
+                  rx1 = rx1 + t * (rx2 - rx1);
+                  ry1 = near;
+                }
+                যদি (ry2 < near) {
+                  চলক t = (near - ry2) / (ry1 - ry2);
+                  rx2 = rx2 + t * (rx1 - rx2);
+                  ry2 = near;
+                }
+              }
+
+              যদি (!clipped) {
+                চলক sx1 = 160.0 + (rx1 * scale) / ry1;
+                চলক sx2 = 160.0 + (rx2 * scale) / ry2;
+
+                চলক min_sx = m_min(sx1, sx2);
+                চলক max_sx = m_max(sx1, sx2);
+
+                যদি (max_sx >= 0.0 আৰু min_sx < 320.0) {
+                  চলক s1 = line_s1[l_idx];
+                  চলক s2 = line_s2[l_idx];
+
+                  চলক floor_h = 0.0;
+                  চলক ceil_h = 0.0;
+                  চলক is_portal = মিছা;
+
+                  যদি (s2 != 65535) {
+                    is_portal = সঁচা;
+                    floor_h = sec_floor[side_sector[s1]] * 1.0;
+                    ceil_h = sec_ceil[side_sector[s1]] * 1.0;
+                  } নহলে {
+                    floor_h = sec_floor[side_sector[s1]] * 1.0;
+                    ceil_h = sec_ceil[side_sector[s1]] * 1.0;
+                  }
+
+                  চলক h_ceil = ceil_h - player_h;
+                  চলক h_floor = floor_h - player_h;
+
+                  চলক sy1_top = 100.0 - (h_ceil * scale) / ry1;
+                  চলক sy1_bot = 100.0 - (h_floor * scale) / ry1;
+                  চলক sy2_top = 100.0 - (h_ceil * scale) / ry2;
+                  চলক sy2_bot = 100.0 - (h_floor * scale) / ry2;
+
+                  চলক x_start = floor(m_max(0.0, min_sx));
+                  চলক x_end = floor(m_min(319.0, max_sx));
+
+                  চলক wall_dx = vx[v2] - vx[v1];
+                  চলক wall_dy = vy[v2] - vy[v1];
+                  চলক wall_len = sqrt(wall_dx * wall_dx + wall_dy * wall_dy) + 0.1;
+                  চলক shade = m_abs(wall_dx) / wall_len;
+
+                  চলক sec_idx = side_sector[s1];
+                  চলক light_coeff = sec_light[sec_idx] / 255.0;
+                  যদি (light_coeff < 0.2) light_coeff = 0.2;
+
+                  চলক r = 0; চলক g = 0; চলক b = 0;
+                  যদি (is_portal) {
+                    r = floor(40 * light_coeff);
+                    g = floor(60 * light_coeff);
+                    b = floor(90 * light_coeff);
+                  } নহলে {
+                    r = floor((40 + 40 * shade) * light_coeff);
+                    g = floor((80 + 80 * shade) * light_coeff);
+                    b = floor((180 + 75 * shade) * light_coeff);
+                  }
+
+                  চলক x = x_start;
+                  যেতিয়া (x <= x_end) {
+                    চলক t = 0.0;
+                    যদি (sx2 != sx1) {
+                      t = (x - sx1) / (sx2 - sx1);
+                    }
+                    
+                    চলক y_top = sy1_top + t * (sy2_top - sy1_top);
+                    চলক y_bot = sy1_bot + t * (sy2_bot - sy1_bot);
+
+                    চলক y_start = floor(m_max(0.0, m_min(y_top, y_bot)));
+                    চলক y_end = floor(m_min(199.0, m_max(y_top, y_bot)));
+
+                    যদি (is_portal) {
+                      চলক yt = floor(y_top);
+                      যদি (yt >= 0 আৰু yt < 200) {
+                        চলক offset = (yt * প্ৰস্থ + x) * 4;
+                        screen_buffer[offset] = r;
+                        screen_buffer[offset + 1] = g;
+                        screen_buffer[offset + 2] = b;
+                        screen_buffer[offset + 3] = 255;
+                      }
+                      চলক yb = floor(y_bot);
+                      যদি (yb >= 0 আৰু yb < 200) {
+                        চলক offset = (yb * প্ৰস্থ + x) * 4;
+                        screen_buffer[offset] = r;
+                        screen_buffer[offset + 1] = g;
+                        screen_buffer[offset + 2] = b;
+                        screen_buffer[offset + 3] = 255;
+                      }
+                    } নহলে {
+                      চলক y = y_start;
+                      যেতিয়া (y <= y_end) {
+                        চলক offset = (y * প্ৰস্থ + x) * 4;
+                        screen_buffer[offset] = r;
+                        screen_buffer[offset + 1] = g;
+                        screen_buffer[offset + 2] = b;
+                        screen_buffer[offset + 3] = 255;
+                        y = y + 1;
+                      }
+                    }
+                    x = x + 1;
+                  }
+
+                  যদি (!is_portal) {
+                    চলক edge_r = floor(100 * light_coeff);
+                    চলক edge_g = floor(200 * light_coeff);
+                    চলক edge_b = floor(255 * light_coeff);
+                    
+                    চলক x1 = floor(sx1);
+                    যদি (x1 >= 0 আৰু x1 < 320) {
+                      চলক y_start = floor(m_max(0.0, m_min(sy1_top, sy1_bot)));
+                      চলক y_end = floor(m_min(199.0, m_max(sy1_top, sy1_bot)));
+                      চলক y = y_start;
+                      যেতিয়া (y <= y_end) {
+                        চলক offset = (y * প্ৰস্থ + x1) * 4;
+                        screen_buffer[offset] = edge_r;
+                        screen_buffer[offset + 1] = edge_g;
+                        screen_buffer[offset + 2] = edge_b;
+                        screen_buffer[offset + 3] = 255;
+                        y = y + 1;
+                      }
+                    }
+                    চলক x2 = floor(sx2);
+                    যদি (x2 >= 0 আৰু x2 < 320) {
+                      চলক y_start = floor(m_max(0.0, m_min(sy2_top, sy2_bot)));
+                      চলক y_end = floor(m_min(199.0, m_max(sy2_top, sy2_bot)));
+                      চলক y = y_start;
+                      যেতিয়া (y <= y_end) {
+                        চলক offset = (y * প্ৰস্থ + x2) * 4;
+                        screen_buffer[offset] = edge_r;
+                        screen_buffer[offset + 1] = edge_g;
+                        screen_buffer[offset + 2] = edge_b;
+                        screen_buffer[offset + 3] = 255;
+                        y = y + 1;
+                      }
+                    }
+                  }
+                }
+              }
+
+            } নহলে {
+              // --- SPRITE BILLBOARD RENDER ---
+              চলক ti = l_idx - 10000;
+              চলক tx = thing_x[ti];
+              চলক ty = thing_y[ti];
+              চলক ttype = thing_type[ti];
+
+              চলক dx = tx - px;
+              চলক dy = ty - py;
+              
+              চলক cos_a = cos(-pa);
+              চলক sin_a = sin(-pa);
+              
+              চলক rx = dx * cos_a - dy * sin_a;
+              চলক ry = dx * sin_a + dy * cos_a;
+
+              চলক sx = 160.0 + (rx * scale) / ry;
+              
+              // Project bottom and top Y
+              চলক sy_bot = floor(100.0 + (41.0 * scale) / ry);
+              চলক sy_top = floor(sy_bot - (45.0 * scale) / ry);
+              চলক sprite_w = floor((15.0 * scale) / ry);
+
+              যদি (sx >= -40.0 আৰু sx < 360.0) {
+                // Directional shading/lighting coefficient based on distance
+                চলক light_coeff = 300.0 / ry;
+                যদি (light_coeff > 1.0) light_coeff = 1.0;
+                যদি (light_coeff < 0.25) light_coeff = 0.25;
+
+                যদি (ttype == 2035) {
+                  // BARREL: Draw green cylinder outline
+                  চলক r = floor(50 * light_coeff);
+                  চলক g = floor(220 * light_coeff);
+                  চলক b = floor(50 * light_coeff);
+
+                  drawLine(screen_buffer, sx - sprite_w, sy_top, sx - sprite_w, sy_bot, r, g, b);
+                  drawLine(screen_buffer, sx + sprite_w, sy_top, sx + sprite_w, sy_bot, r, g, b);
+                  drawLine(screen_buffer, sx - sprite_w, sy_top, sx + sprite_w, sy_top, r, g, b);
+                  drawLine(screen_buffer, sx - sprite_w, sy_bot, sx + sprite_w, sy_bot, r, g, b);
+                  
+                  // Middle bands
+                  চলক band1 = sy_top + floor((sy_bot - sy_top) / 3.0);
+                  চলক band2 = sy_top + floor(2.0 * (sy_bot - sy_top) / 3.0);
+                  drawLine(screen_buffer, sx - sprite_w, band1, sx + sprite_w, band1, r, g, b);
+                  drawLine(screen_buffer, sx - sprite_w, band2, sx + sprite_w, band2, r, g, b);
+                } নহলে {
+                  // MONSTER: Draw orange/red wireframe demon diamond shape
+                  চলক r = floor(220 * light_coeff);
+                  চলক g = floor(80 * light_coeff);
+                  চলক b = floor(50 * light_coeff);
+
+                  // Vertical spine
+                  drawLine(screen_buffer, sx, sy_top, sx, sy_bot, r, g, b);
+                  // Horizontal arms
+                  চলক arm_y = sy_top + floor((sy_bot - sy_top) / 3.0);
+                  drawLine(screen_buffer, sx - sprite_w, arm_y, sx + sprite_w, arm_y, r, g, b);
+                  // Upper body lines
+                  drawLine(screen_buffer, sx, sy_top, sx - sprite_w, arm_y, r, g, b);
+                  drawLine(screen_buffer, sx, sy_top, sx + sprite_w, arm_y, r, g, b);
+                  // Lower body lines
+                  drawLine(screen_buffer, sx - sprite_w, arm_y, sx, sy_bot, r, g, b);
+                  drawLine(screen_buffer, sx + sprite_w, arm_y, sx, sy_bot, r, g, b);
+                }
+              }
+            }
+
+            wi = wi + 1;
+          }
+
+          // --- 4. OVERLAY INTERACTIVE WEAPON AND STATUS BAR HUD ---
+
+          // Draw weapon flash and recoil
+          যদি (!player_dead আৰু !player_won) {
+            চলক recoil = 0;
+            যদি (flash_timer > 0) {
+              recoil = 8;
+              // Draw bright muzzle flash vectors
+              drawLine(screen_buffer, 160, 130 + recoil, 150, 110 + recoil, 255, 200, 0);
+              drawLine(screen_buffer, 160, 130 + recoil, 170, 110 + recoil, 255, 200, 0);
+              drawLine(screen_buffer, 160, 130 + recoil, 160, 105 + recoil, 255, 255, 100);
+            }
+
+            // Pistol frame lines (centered around X=160, base Y=170)
+            চলক gun_y = 170 + recoil;
+            // Left side barrel
+            drawLine(screen_buffer, 154, gun_y, 154, gun_y - 35, 120, 120, 130);
+            // Right side barrel
+            drawLine(screen_buffer, 166, gun_y, 166, gun_y - 35, 120, 120, 130);
+            // Top barrel slide
+            drawLine(screen_buffer, 154, gun_y - 35, 166, gun_y - 35, 140, 140, 150);
+            // Iron sights
+            drawLine(screen_buffer, 160, gun_y - 35, 160, gun_y - 40, 220, 50, 50);
+            // Left grip outline
+            drawLine(screen_buffer, 154, gun_y, 145, gun_y + 15, 80, 80, 80);
+            // Right grip outline
+            drawLine(screen_buffer, 166, gun_y, 175, gun_y + 15, 80, 80, 80);
+          }
+
+          // Draw Death or Victory screens
+          যদি (player_dead) {
+            drawString(screen_buffer, "YOU DIED", 110, 60, 8, 255, 50, 50);
+            drawString(screen_buffer, "PRESS R TO RESTART", 70, 90, 5, 200, 200, 200);
+          } নহলে যদি (player_won) {
+            drawString(screen_buffer, "VICTORY", 115, 30, 8, 50, 255, 50);
+            
+            চলক kills_pct = 0;
+            যদি (total_monsters > 0) {
+              kills_pct = floor((monsters_killed / total_monsters) * 100);
+            }
+            drawString(screen_buffer, "KILLS " + to_string(kills_pct) + " PCT", 90, 65, 5, 220, 220, 220);
+            
+            চলক items_pct = 0;
+            যদি (total_pickups > 0) {
+              items_pct = floor((pickups_collected / total_pickups) * 100);
+            }
+            drawString(screen_buffer, "ITEMS " + to_string(items_pct) + " PCT", 90, 85, 5, 220, 220, 220);
+            
+            drawString(screen_buffer, "TIME " + to_string(floor(start_time)) + " SEC", 95, 105, 5, 220, 220, 220);
+            drawString(screen_buffer, "PRESS R TO PLAY AGAIN", 60, 135, 5, 200, 200, 200);
+          }
+
+          // Draw HUD Alert Message
+          যদি (hud_message_timer > 0) {
+            চলক msg_len = str_len(hud_message);
+            চলক start_x = floor(160 - (msg_len * 6) / 2);
+            drawString(screen_buffer, hud_message, start_x, 15, 4, 255, 255, 255);
+          }
+
+          // Draw Status Bar Box (Y = 170 to 199)
+          চলক sy = 170;
+          যেতিয়া (sy < 200) {
+            চলক sx = 0;
+            যেতিয়া (sx < প্ৰস্থ) {
+              চলক offset = (sy * প্ৰস্থ + sx) * 4;
+              screen_buffer[offset] = 40;     // R
+              screen_buffer[offset + 1] = 40; // G
+              screen_buffer[offset + 2] = 45; // B
+              screen_buffer[offset + 3] = 255;
+              sx = sx + 1;
+            }
+            sy = sy + 1;
+          }
+
+          // Draw border line for status bar
+          drawLine(screen_buffer, 0, 170, 320, 170, 100, 100, 110);
+
+          // Draw HP HUD text
+          // H
+          drawLine(screen_buffer, 20, 178, 20, 188, 180, 180, 180);
+          drawLine(screen_buffer, 26, 178, 26, 188, 180, 180, 180);
+          drawLine(screen_buffer, 20, 183, 26, 183, 180, 180, 180);
+          // P
+          drawLine(screen_buffer, 30, 178, 30, 188, 180, 180, 180);
+          drawLine(screen_buffer, 36, 178, 36, 183, 180, 180, 180);
+          drawLine(screen_buffer, 30, 178, 36, 178, 180, 180, 180);
+          drawLine(screen_buffer, 30, 183, 36, 183, 180, 180, 180);
+
+          // Draw Health Value
+          drawNumber(screen_buffer, player_hp, 44, 178, 5, 230, 50, 50);
+
+          // Draw AMMO HUD text
+          // A
+          drawLine(screen_buffer, 120, 178, 120, 188, 180, 180, 180);
+          drawLine(screen_buffer, 126, 178, 126, 188, 180, 180, 180);
+          drawLine(screen_buffer, 120, 178, 126, 178, 180, 180, 180);
+          drawLine(screen_buffer, 120, 183, 126, 183, 180, 180, 180);
+          // M
+          drawLine(screen_buffer, 130, 178, 130, 188, 180, 180, 180);
+          drawLine(screen_buffer, 136, 178, 136, 188, 180, 180, 180);
+          drawLine(screen_buffer, 130, 178, 133, 182, 180, 180, 180);
+          drawLine(screen_buffer, 136, 178, 133, 182, 180, 180, 180);
+
+          // Draw Ammo Value
+          drawNumber(screen_buffer, player_ammo, 144, 178, 5, 220, 200, 50);
+
+          // Draw ARMOR HUD text
+          // A
+          drawLine(screen_buffer, 220, 178, 220, 188, 180, 180, 180);
+          drawLine(screen_buffer, 226, 178, 226, 188, 180, 180, 180);
+          drawLine(screen_buffer, 220, 178, 226, 178, 180, 180, 180);
+          drawLine(screen_buffer, 220, 183, 226, 183, 180, 180, 180);
+          // R
+          drawLine(screen_buffer, 230, 178, 230, 188, 180, 180, 180);
+          drawLine(screen_buffer, 236, 178, 236, 183, 180, 180, 180);
+          drawLine(screen_buffer, 230, 178, 236, 178, 180, 180, 180);
+          drawLine(screen_buffer, 230, 183, 236, 183, 180, 180, 180);
+          drawLine(screen_buffer, 233, 183, 236, 188, 180, 180, 180);
+
+          // Draw Armor Value
+          drawNumber(screen_buffer, player_armor, 244, 178, 5, 50, 120, 230);
+        }
+
+        // Push buffer to window
+        চলক success = window_update(screen_buffer);
+        যদি (!success) {
+          running = মিছা;
+        }
+
+        sleep(0.016); // limit frame rate to 60 FPS
+      }
+      window_close();
+    }
+  }
+}
+প্ৰকাশ "বিদায়!";
+

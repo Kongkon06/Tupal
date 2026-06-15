@@ -1,0 +1,11 @@
+চলক ফাইল = খোল("doom/doom1.wad", "rb");
+যদি (ফাইল != নাই) {
+  চলক বাফাৰ = file_read_bytes(ফাইল);
+  file_close(ফাইল);
+  প্ৰকাশ "buffer size:";
+  প্ৰকাশ byte_array_size(বাফাৰ);
+  প্ৰকাশ "Should give a byte_array";
+  প্ৰকাশ বাফাৰ;
+  প্ৰকাশ বাফাৰ[0];
+  
+}
