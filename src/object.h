@@ -37,7 +37,8 @@ typedef enum {
   OBJ_STRING,
   OBJ_UPVALUE,
   OBJ_LIST,
-  OBJ_FILE
+  OBJ_FILE,
+  OBJ_MAP
 } ObjType;
 
 struct Obj {
@@ -73,6 +74,7 @@ typedef struct ObjUpvalue {
   Value closed;
   struct ObjUpvalue* next;
 } ObjUpvalue;
+
 typedef struct {
   Obj obj;
   ObjFunction* function;
@@ -97,6 +99,11 @@ typedef struct {
   Value receiver;
   ObjClosure* method;
 } ObjBoundMethod;
+
+typedef struct {
+  Obj obj;
+  Table table;
+} ObjMap;
 
 ObjBoundMethod* newBoundMethod(Value receiver,
                                ObjClosure* method);

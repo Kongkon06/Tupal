@@ -537,6 +537,18 @@ static void unary(bool canAssign) {
   }
 }
 
+static void index_(bool canAssign) {
+  expression(); // the index expression
+  consume(TOKEN_RIGHT_BRACKET, "Expect ']' after index.");
+
+  if (canAssign && match(TOKEN_EQUAL)) {
+    expression();
+    emitByte(OP_SET_INDEX);
+  } else {
+    emitByte(OP_GET_INDEX);
+  }
+}
+
 ParseRule rules[] = {
 
   [TOKEN_LEFT_PAREN]    = {grouping, call,   PREC_CALL},
@@ -556,6 +568,9 @@ ParseRule rules[] = {
 
   [TOKEN_BANG_EQUAL]    = {NULL,     binary, PREC_EQUALITY},
   [TOKEN_EQUAL]         = {NULL,     NULL,   PREC_NONE},
+
+  [TOKEN_LEFT_BRACKET]  = {NULL, index_, PREC_CALL},
+  [TOKEN_RIGHT_BRACKET] = {NULL,     NULL,   PREC_NONE},
 
   [TOKEN_EQUAL_EQUAL]   = {NULL,     binary, PREC_EQUALITY},
   [TOKEN_GREATER]       = {NULL,     binary, PREC_COMPARISON},

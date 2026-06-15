@@ -1,35 +1,19 @@
-Matched List token
-Parsed number: 1.000000
-Parsed number: 2.000000
-Parsed number: 3.000000
-Count of list elements: 3
-== <script> ==
-0000    1 OP_CONSTANT         1 '1'
-0002    | OP_CONSTANT         2 '2'
-0004    | OP_CONSTANT         3 '3'
-0006    | OP_LIST             3 '3'
-0008    | OP_DEFINE_GLOBAL    0 'test'
-0010    2 OP_GET_GLOBAL       4 'test'
-0012    | OP_PRINT
-0013    3 OP_NIL
-0014    | OP_RETURN
-testtest          [ <script> ]
-0000    1 OP_CONSTANT         1 '1'
-          [ <script> ][ 1 ]
-0002    | OP_CONSTANT         2 '2'
-          [ <script> ][ 1 ][ 2 ]
-0004    | OP_CONSTANT         3 '3'
-          [ <script> ][ 1 ][ 2 ][ 3 ]
-0006    | OP_LIST             3 '3'
-776          [ <script> ][ 1 ][ 2 ][ 3 ]
-0009    | OP_CONSTANT         7 '0'
-          [ <script> ][ 1 ][ 2 ][ 3 ][ 0 ]
-0011    | OP_POP
-          [ <script> ][ 1 ][ 2 ][ 3 ]
-0012    | OP_PRINT
-3
-          [ <script> ][ 1 ][ 2 ]
-0013    3 OP_NIL
-          [ <script> ][ 1 ][ 2 ][ nil ]
-0014    | OP_RETURN
-testtest
+Major missing pieces for a Doom-style engine:
+
+1. No arrays/maps beyond a basic fixed-size list — you have OP_LIST but it builds a fixed list at creation; 
+no general dynamic indexing syntax (list[i]), no 2D grids, no hash maps for level data, sprites, etc. 
+You'd need [] get/set operators in the parser and corresponding opcodes.
+2. No bitwise operators — critical for raycasting math, color packing (RGBA), flags, collision masks. Only + - * / and comparisons exist.
+3. No modulo operator — needed constantly for angle wrapping, texture coordinate wrapping, grid indexing.
+4. No math library (sin/cos/tan/sqrt/atan2) — raycasting is pure trigonometry. You only have clock, file I/O, and sleep as natives. Need to expose libm functions as natives.
+5. No graphics/rendering output — there's zero way to draw pixels, present a framebuffer, or open a window. You'd need to bind something like SDL2 (or a minimal software framebuffer + PPM/X11/SDL output) as native functions: create_window, set_pixel, draw_frame, present.
+6. No input handling — no native to poll keyboard/mouse state per frame.
+7. No real number formatting / string conversion — no to_string, number_to_string, string_to_number, char_at, substring, length for strings. Needed for HUD, parsing data files.
+8. No constants/enums beyond hardcoded keywords — fine, less critical.
+9. Performance — tree-walking-free bytecode VM is okay, but with no integer-typed fast paths and a single global hash table for globals, a 320x200 framebuffer loop (64,000 pixels/frame) in interpreted bytecode will be extremely slow. You may need to special-case array/buffer access opcodes (OP_GET_INDEX/OP_SET_INDEX) operating on raw byte buffers, not boxed Value lists.
+10. No multi-dimensional/efficient binary buffers — for a framebuffer or texture data, boxing every pixel as a Value (16 bytes via NaN-boxing or tagged union) in a dynamic list is memory- and cache-hostile. You'd want a raw ObjByteArray/ObjBuffer type.
+11. Limited stdlib for collections — no map, filter, sorting, no dictionaries — useful for entity management (monsters, items).
+12. No struct/record beyond classes — classes work but every entity (Value-boxed instance with hashtable fields) is heavy for hundreds of game objects updated every frame; consider a lighter struct mechanism.
+13. No fixed frame-timing/event loop primitives — sleep exists but no vsync/delta-time helper, no event polling integration with a window system.
+14. Constant pool limited to 256 (UINT8_COUNT) — a large game (textures, sprites, level data as constants) may overflow; consider OP_CONSTANT_LONG with a 16/24-bit operand like later clox extensions.
+15. No modules/namespacing beyond your import preprocessor — workable but textual-only, no circular import protection, no caching (re-reads/re-includes files each time).

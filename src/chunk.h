@@ -41,6 +41,8 @@ typedef enum {
   OP_RETURN,
   OP_CLASS,
   OP_LIST,
+  OP_GET_INDEX,
+  OP_SET_INDEX,
   OP_INHERIT,
   OP_METHOD
 } OpCode;

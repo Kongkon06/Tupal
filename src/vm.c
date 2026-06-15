@@ -376,6 +376,50 @@ static void defineMethod(ObjString *name)
 
 static bool invokeListMethod(ObjList *list, ObjString *method, int argCount)
 {
+  // get(index)
+  if (strcmp(method->chars, "get") == 0)
+  {
+    if (argCount != 1 || !IS_NUMBER(peek(0)))
+    {
+      runtimeError("get() expects 1 number argument.");
+      return false;
+    }
+    int index = (int)AS_NUMBER(peek(0));
+    if (index < 0 || index >= list->count)
+    {
+      runtimeError("List index out of range.");
+      return false;
+    }
+    Value value = list->items[index];
+    pop(); // index
+    pop(); // receiver
+    push(value);
+    return true;
+  }
+
+  // set(index, value)
+  if (strcmp(method->chars, "set") == 0)
+  {
+    if (argCount != 2 || !IS_NUMBER(peek(1)))
+    {
+      runtimeError("set() expects (index, value).");
+      return false;
+    }
+    int index = (int)AS_NUMBER(peek(1));
+    if (index < 0 || index >= list->count)
+    {
+      runtimeError("List index out of range.");
+      return false;
+    }
+    Value value = peek(0);
+    list->items[index] = value;
+    pop();
+    pop(); // value, index
+    pop(); // receiver
+    push(NIL_VAL);
+    return true;
+  }
+
   // push(value)
   if (strcmp(method->chars, "push") == 0)
   {
@@ -384,14 +428,10 @@ static bool invokeListMethod(ObjList *list, ObjString *method, int argCount)
       runtimeError("push() expects 1 argument.");
       return false;
     }
-
     writeList(list, peek(0));
-
     pop(); // argument
     pop(); // receiver list
-
     push(NIL_VAL);
-
     return true;
   }
 
@@ -409,13 +449,10 @@ static bool invokeListMethod(ObjList *list, ObjString *method, int argCount)
       runtimeError("Cannot pop from empty list.");
       return false;
     }
-
     Value value = list->items[list->count - 1];
     list->count--;
-
     pop(); // receiver
     push(value);
-
     return true;
   }
 
@@ -427,11 +464,8 @@ static bool invokeListMethod(ObjList *list, ObjString *method, int argCount)
       runtimeError("size() expects no arguments.");
       return false;
     }
-
     pop(); // receiver
-
     push(NUMBER_VAL(list->count));
-
     return true;
   }
 
@@ -448,23 +482,16 @@ static bool invokeListMethod(ObjList *list, ObjString *method, int argCount)
          i < j;
          i++, j--)
     {
-
       Value tmp = list->items[i];
       list->items[i] = list->items[j];
       list->items[j] = tmp;
     }
 
     pop(); // receiver
-
     push(NIL_VAL);
-
     return true;
   }
-
-  runtimeError(
-      "Undefined list method '%s'.",
-      method->chars);
-
+  runtimeError("Undefined list method '%s'.", method->chars);
   return false;
 }
 
@@ -864,6 +891,45 @@ static InterpretResult run()
       }
       list->count = count;
       push(OBJ_VAL(list));
+      break;
+    }
+    case OP_GET_INDEX:
+    {
+      if (!IS_NUMBER(peek(0)) || !IS_LIST(peek(1)))
+      {
+        runtimeError("Can only index into lists with numbers.");
+        return INTERPRET_RUNTIME_ERROR;
+      }
+      int index = (int)AS_NUMBER(pop());
+      ObjList *list = AS_LIST(pop());
+      if (index < 0 || index >= list->count)
+      {
+        runtimeError("List index out of range.");
+        return INTERPRET_RUNTIME_ERROR;
+      }
+      push(list->items[index]);
+      break;
+    }
+    case OP_SET_INDEX:
+    {
+      if (!IS_NUMBER(peek(1)) || !IS_LIST(peek(2)))
+      {
+        runtimeError("Can only index into lists with numbers.");
+        return INTERPRET_RUNTIME_ERROR;
+      }
+      Value value = peek(0);
+      int index = (int)AS_NUMBER(peek(1));
+      ObjList *list = AS_LIST(peek(2));
+      if (index < 0 || index >= list->count)
+      {
+        runtimeError("List index out of range.");
+        return INTERPRET_RUNTIME_ERROR;
+      }
+      list->items[index] = value;
+      pop();
+      pop();
+      pop();
+      push(value);
       break;
     }
     }

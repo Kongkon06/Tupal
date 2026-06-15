@@ -100,19 +100,10 @@ ObjFile *newFileObj(FILE *handle, ObjString *name)
 
 void writeList(ObjList* list, Value value) {
     if (list->capacity < list->count + 1) {
-
         int oldCapacity = list->capacity;
 
-        list->capacity =
-            GROW_CAPACITY(oldCapacity);
-
-        list->items =
-            GROW_ARRAY(
-                Value,
-                list->items,
-                oldCapacity,
-                list->capacity
-            );
+        list->capacity = GROW_CAPACITY(oldCapacity);
+        list->items = GROW_ARRAY(Value,list->items,oldCapacity,list->capacity);
     }
     list->items[list->count++] = value;
 }

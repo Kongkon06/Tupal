@@ -19,7 +19,7 @@ typedef struct {
 
 static Keyword keywords[] = {
   {"আৰু", TOKEN_AND},
-  {"class", TOKEN_CLASS},
+  {"বিভাগ", TOKEN_CLASS},
   {"list", TOKEN_LIST},
   {"নহলে", TOKEN_ELSE},
   {"মিছা", TOKEN_FALSE},
@@ -33,7 +33,7 @@ static Keyword keywords[] = {
   {"ডাংগৰিয়া", TOKEN_SUPER},
   {"this", TOKEN_THIS},
   {"সঁচা", TOKEN_TRUE},
-  {"var", TOKEN_VAR},
+  {"চলক", TOKEN_VAR},
   {"যেতিয়া", TOKEN_WHILE},
 };
 
