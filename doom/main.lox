@@ -2,8 +2,8 @@
 প্ৰকাশ "Tupal Doom Engine আৰম্ভ কৰা হৈছে...";
 
 // Screen resolution
-চলক প্ৰস্থ = 800;
-চলক উচ্চতা = 500;
+চলক প্ৰস্থ = 320;
+চলক উচ্চতা = 200;
 
 // Math helpers
 চলক PI = 3.14159265;
@@ -97,6 +97,82 @@
     i = i + 1;
   }
 
+  // Scan WAD directories for PLAYPAL, PNAMES, TEXTURE1
+  চলক playpal_idx = -1;
+  চলক pnames_idx = -1;
+  চলক texture1_idx = -1;
+  
+  চলক li = 0;
+  যেতিয়া (li < numLumps) {
+    চলক name = lump_names[li];
+    যদি (name == "PLAYPAL") playpal_idx = li;
+    যদি (name == "PNAMES") pnames_idx = li;
+    যদি (name == "TEXTURE1") texture1_idx = li;
+    li = li + 1;
+  }
+
+  // Parse PLAYPAL
+  list pal_r [];
+  list pal_g [];
+  list pal_b [];
+  যদি (playpal_idx != -1) {
+    চলক playpal_offset = lump_offsets[playpal_idx];
+    চলক ci = 0;
+    যেতিয়া (ci < 256) {
+      pal_r.push(বাফাৰ[playpal_offset + ci * 3]);
+      pal_g.push(বাফাৰ[playpal_offset + ci * 3 + 1]);
+      pal_b.push(বাফাৰ[playpal_offset + ci * 3 + 2]);
+      ci = ci + 1;
+    }
+  }
+
+  // Parse PNAMES
+  list patch_names [];
+  যদি (pnames_idx != -1) {
+    চলক pnames_offset = lump_offsets[pnames_idx];
+    চলক num_patches = read32(বাফাৰ, pnames_offset);
+    চলক pi = 0;
+    যেতিয়া (pi < num_patches) {
+      patch_names.push(byte_array_to_string(বাফাৰ, pnames_offset + 4 + pi * 8, 8));
+      pi = pi + 1;
+    }
+  }
+
+  // Parse TEXTURE1
+  চলক texture_defs = map_new();
+  চলক loaded_textures = map_new();
+  চলক ti = 0;
+  যদি (texture1_idx != -1) {
+    চলক texture1_offset = lump_offsets[texture1_idx];
+    চলক num_textures = read32(বাফাৰ, texture1_offset);
+    যেতিয়া (ti < num_textures) {
+      চলক tex_offset = texture1_offset + read32(বাফাৰ, texture1_offset + 4 + ti * 4);
+      চলক name = byte_array_to_string(বাফাৰ, tex_offset, 8);
+      চলক w = read16u(বাফাৰ, tex_offset + 12);
+      চলক h = read16u(বাফাৰ, tex_offset + 14);
+      চলক num_patches = read16u(বাফাৰ, tex_offset + 20);
+
+      চলক tex_def = map_new();
+      tex_def["width"] = w;
+      tex_def["height"] = h;
+
+      list patches_list [];
+      চলক p = 0;
+      যেতিয়া (p < num_patches) {
+        চলক p_desc_offset = tex_offset + 22 + p * 10;
+        চলক p_desc = map_new();
+        p_desc["origin_x"] = read16s(বাফাৰ, p_desc_offset);
+        p_desc["origin_y"] = read16s(বাফাৰ, p_desc_offset + 2);
+        p_desc["patch_idx"] = read16u(বাফাৰ, p_desc_offset + 4);
+        patches_list.push(p_desc);
+        p = p + 1;
+      }
+      tex_def["patches"] = patches_list;
+      texture_defs[name] = tex_def;
+      ti = ti + 1;
+    }
+  }
+
   যদি (E1M1_idx == -1) {
     প্ৰকাশ "Error: Level E1M1 lump not found in the WAD file.";
   } নহলে {
@@ -148,10 +224,20 @@
     চলক side_size = lump_sizes[E1M1_idx + 3];
     চলক num_sidedefs = floor(side_size / 30);
     list side_sector [];
+    list side_tex_top [];
+    list side_tex_bot [];
+    list side_tex_mid [];
+    list side_off_x [];
+    list side_off_y [];
 
     চলক sidei = 0;
     যেতিয়া (sidei < num_sidedefs) {
       চলক offset = side_offset + sidei * 30;
+      side_off_x.push(read16s(বাফাৰ, offset));
+      side_off_y.push(read16s(বাফাৰ, offset + 2));
+      side_tex_top.push(byte_array_to_string(বাফাৰ, offset + 4, 8));
+      side_tex_bot.push(byte_array_to_string(বাফাৰ, offset + 12, 8));
+      side_tex_mid.push(byte_array_to_string(বাফাৰ, offset + 20, 8));
       side_sector.push(read16u(বাফাৰ, offset + 28)); // sector index is at offset 28
       sidei = sidei + 1;
     }
@@ -266,6 +352,86 @@
     প্ৰকাশ "Total Pickups:";
     প্ৰকাশ total_pickups;
 
+    // Function to assemble and decode texture
+    ফলন get_texture(name) {
+      যদি (map_has(loaded_textures, name)) {
+        ল loaded_textures[name];
+      }
+      যদি (!map_has(texture_defs, name)) {
+        ল নাই;
+      }
+      চলক def = texture_defs[name];
+      চলক w = def["width"];
+      চলক h = def["height"];
+      চলক patches = def["patches"];
+
+      চলক tex_buf = byte_array_new(w * h);
+      চলক ci = 0;
+      যেতিয়া (ci < w * h) {
+        tex_buf[ci] = 0;
+        ci = ci + 1;
+      }
+
+      চলক pi = 0;
+      যেতিয়া (pi < patches.size()) {
+        চলক p_desc = patches[pi];
+        চলক origin_x = p_desc["origin_x"];
+        চলক origin_y = p_desc["origin_y"];
+        চলক patch_idx = p_desc["patch_idx"];
+
+        যদি (patch_idx >= 0 আৰু patch_idx < patch_names.size()) {
+          চলক p_name = patch_names[patch_idx];
+          চলক p_lump_idx = -1;
+          চলক li = 0;
+          যেতিয়া (li < numLumps আৰু p_lump_idx == -1) {
+            যদি (lump_names[li] == p_name) {
+              p_lump_idx = li;
+            }
+            li = li + 1;
+          }
+
+          যদি (p_lump_idx != -1) {
+            চলক patch_offset = lump_offsets[p_lump_idx];
+            চলক patch_w = read16u(বাফাৰ, patch_offset);
+            চলক patch_h = read16u(বাফাৰ, patch_offset + 2);
+
+            চলক col = 0;
+            যেতিয়া (col < patch_w) {
+              চলক col_offset = read32(বাফাৰ, patch_offset + 8 + col * 4);
+              চলক post_offset = patch_offset + col_offset;
+              চলক post_running = সঁচা;
+
+              যেতিয়া (post_running) {
+                চলক top_delta = বাফাৰ[post_offset];
+                যদি (top_delta == 255) {
+                  post_running = মিছা;
+                } নহলে {
+                  চলক length = বাফাৰ[post_offset + 1];
+                  চলক pixel_data_offset = post_offset + 3;
+
+                  চলক row = 0;
+                  যেতিয়া (row < length) {
+                    চলক pixel = বাফাৰ[pixel_data_offset + row];
+                    চলক dest_x = origin_x + col;
+                    চলক dest_y = origin_y + top_delta + row;
+
+                    যদি (dest_x >= 0 আৰু dest_x < w আৰু dest_y >= 0 আৰু dest_y < h) {
+                      tex_buf[dest_y * w + dest_x] = pixel;
+                    }
+                    row = row + 1;
+                  }
+                  post_offset = post_offset + length + 4;
+                }
+              }
+              col = col + 1;
+            }
+          }
+        }
+        pi = pi + 1;
+      }
+      loaded_textures[name] = tex_buf;
+      ল tex_buf;
+    }
     // Initialize Window
     চলক win_ok = window_init(প্ৰস্থ, উচ্চতা, "Tupal Doom Engine - E1M1");
     যদি (!win_ok) {
@@ -275,6 +441,12 @@
       চলক running = সঁচা;
       চলক automap_active = মিছা;
       চলক automap_zoom = 0.04;
+
+      চলক আধা_প্ৰস্থ = প্ৰস্থ / 2.0;
+      চলক আধা_উচ্চতা = উচ্চতা / 2.0;
+      চলক প্ৰস্থ_সীমা = প্ৰস্থ - 1.0;
+      চলক উচ্চতা_সীমা = উচ্চতা - 1.0;
+      চলক hud_y = উচ্চতা - 30.0;
 
       // Combat system variables
       চলক player_hp = 100;
@@ -954,7 +1126,7 @@
                         যদি (ttype == 9) dmg = 10; // Sergeant
                         যদি (ttype == 3001) dmg = 8; // Imp
                         
-                        monster_cooldown[mti] = 50 + floor(clock() * 10) % 20; // random cooldown
+                        monster_cooldown[mti] = 50 + floor(ঘড়ী() * 10) % 20; // random cooldown
                       }
                     }
                     
@@ -1021,10 +1193,10 @@
             চলক dy2 = (vy[v2] - py) * automap_zoom;
 
             // Screen coords (Doom Y is up, screen Y is down)
-            চলক sx1 = floor(160.0 + dx1);
-            চলক sy1 = floor(100.0 - dy1);
-            চলক sx2 = floor(160.0 + dx2);
-            চলক sy2 = floor(100.0 - dy2);
+            চলক sx1 = floor(আধা_প্ৰস্থ + dx1);
+            চলক sy1 = floor(আধা_উচ্চতা - dy1);
+            চলক sx2 = floor(আধা_প্ৰস্থ + dx2);
+            চলক sy2 = floor(আধা_উচ্চতা - dy2);
 
             // Color-code the lines
             চলক r = 100; চলক g = 100; চলক b = 100;
@@ -1049,10 +1221,10 @@
               চলক dx1 = (tx - px) * automap_zoom;
               চলক dy1 = (ty - py) * automap_zoom;
 
-              চলক sx1 = floor(160.0 + dx1);
-              চলক sy1 = floor(100.0 - dy1);
+              চলক sx1 = floor(আধা_প্ৰস্থ + dx1);
+              চলক sy1 = floor(আধা_উচ্চতা - dy1);
 
-              যদি (sx1 >= 0 আৰু sx1 < 320 আৰু sy1 >= 0 আৰু sy1 < 200) {
+              যদি (sx1 >= 0 আৰু sx1 < প্ৰস্থ আৰু sy1 >= 0 আৰু sy1 < উচ্চতা) {
                 চলক offset = (sy1 * প্ৰস্থ + sx1) * 4;
                 চলক r = 220; চলক g = 120; চলক b = 30; // Monsters = Orange
                 যদি (ttype == 2035) {
@@ -1063,7 +1235,7 @@
                 screen_buffer[offset + 2] = b;
                 screen_buffer[offset + 3] = 255;
                 
-                যদি (sx1 + 1 < 320) {
+                যদি (sx1 + 1 < প্ৰস্থ) {
                   চলক offset2 = offset + 4;
                   screen_buffer[offset2] = r;
                   screen_buffer[offset2 + 1] = g;
@@ -1079,12 +1251,12 @@
           চলক cos_p = cos(pa);
           চলক sin_p = sin(pa);
 
-          চলক p1_x = floor(160.0 + cos_p * 8.0);
-          চলক p1_y = floor(100.0 - sin_p * 8.0);
-          চলক p2_x = floor(160.0 + cos(pa + 2.5) * 5.0);
-          চলক p2_y = floor(100.0 - sin(pa + 2.5) * 5.0);
-          চলক p3_x = floor(160.0 + cos(pa - 2.5) * 5.0);
-          চলক p3_y = floor(100.0 - sin(pa - 2.5) * 5.0);
+          চলক p1_x = floor(আধা_প্ৰস্থ + cos_p * 8.0);
+          চলক p1_y = floor(আধা_উচ্চতা - sin_p * 8.0);
+          চলক p2_x = floor(আধা_প্ৰস্থ + cos(pa + 2.5) * 5.0);
+          চলক p2_y = floor(আধা_উচ্চতা - sin(pa + 2.5) * 5.0);
+          চলক p3_x = floor(আধা_প্ৰস্থ + cos(pa - 2.5) * 5.0);
+          চলক p3_y = floor(আধা_উচ্চতা - sin(pa - 2.5) * 5.0);
 
           drawLine(screen_buffer, p1_x, p1_y, p2_x, p2_y, 255, 200, 0);
           drawLine(screen_buffer, p2_x, p2_y, p3_x, p3_y, 255, 200, 0);
@@ -1092,7 +1264,7 @@
 
           // Draw Shooting ray line if muzzle flash is active
           যদি (flash_timer > 0) {
-            drawLine(screen_buffer, 160, 100, 160 + floor(cos_p * 35.0), 100 - floor(sin_p * 35.0), 255, 255, 100);
+            drawLine(screen_buffer, floor(আধা_প্ৰস্থ), floor(আধা_উচ্চতা), floor(আধা_প্ৰস্থ) + floor(cos_p * 35.0), floor(আধা_উচ্চতা) - floor(sin_p * 35.0), 255, 255, 100);
           }
 
         } নহলে {
@@ -1113,7 +1285,7 @@
           চলক col = 0;
           যেতিয়া (col < প্ৰস্থ) {
             চলক y = 0;
-            যেতিয়া (y < 100) {
+            যেতিয়া (y < আধা_উচ্চতা) {
               // Ceiling: Dark Slate Blue
               চলক offset1 = (y * প্ৰস্থ + col) * 4;
               screen_buffer[offset1] = ceil_r;
@@ -1122,7 +1294,7 @@
               screen_buffer[offset1 + 3] = 255;
 
               // Floor: Dark Charcoal Grey
-              চলক offset2 = ((199 - y) * প্ৰস্থ + col) * 4;
+              চলক offset2 = ((উচ্চতা_সীমা - y) * প্ৰস্থ + col) * 4;
               screen_buffer[offset2] = floor_r;
               screen_buffer[offset2 + 1] = floor_g;
               screen_buffer[offset2 + 2] = floor_b;
@@ -1239,7 +1411,7 @@
           }
 
           // Render sorted walls and sprites in correct depth order
-          চলক scale = 160.0;
+          চলক scale = আধা_প্ৰস্থ;
           চলক wi = 0;
           যেতিয়া (wi < n_active) {
             চলক l_idx = active_idx[wi];
@@ -1281,13 +1453,13 @@
               }
 
               যদি (!clipped) {
-                চলক sx1 = 160.0 + (rx1 * scale) / ry1;
-                চলক sx2 = 160.0 + (rx2 * scale) / ry2;
+                চলক sx1 = আধা_প্ৰস্থ + (rx1 * scale) / ry1;
+                চলক sx2 = আধা_প্ৰস্থ + (rx2 * scale) / ry2;
 
                 চলক min_sx = m_min(sx1, sx2);
                 চলক max_sx = m_max(sx1, sx2);
 
-                যদি (max_sx >= 0.0 আৰু min_sx < 320.0) {
+                যদি (max_sx >= 0.0 আৰু min_sx < প্ৰস্থ) {
                   চলক s1 = line_s1[l_idx];
                   চলক s2 = line_s2[l_idx];
 
@@ -1307,13 +1479,13 @@
                   চলক h_ceil = ceil_h - player_h;
                   চলক h_floor = floor_h - player_h;
 
-                  চলক sy1_top = 100.0 - (h_ceil * scale) / ry1;
-                  চলক sy1_bot = 100.0 - (h_floor * scale) / ry1;
-                  চলক sy2_top = 100.0 - (h_ceil * scale) / ry2;
-                  চলক sy2_bot = 100.0 - (h_floor * scale) / ry2;
+                  চলক sy1_top = আধা_উচ্চতা - (h_ceil * scale) / ry1;
+                  চলক sy1_bot = আধা_উচ্চতা - (h_floor * scale) / ry1;
+                  চলক sy2_top = আধা_উচ্চতা - (h_ceil * scale) / ry2;
+                  চলক sy2_bot = আধা_উচ্চতা - (h_floor * scale) / ry2;
 
                   চলক x_start = floor(m_max(0.0, min_sx));
-                  চলক x_end = floor(m_min(319.0, max_sx));
+                  চলক x_end = floor(m_min(প্ৰস্থ_সীমা, max_sx));
 
                   চলক wall_dx = vx[v2] - vx[v1];
                   চলক wall_dy = vy[v2] - vy[v1];
@@ -1335,6 +1507,20 @@
                     b = floor((180 + 75 * shade) * light_coeff);
                   }
 
+                  চলক tex_name = side_tex_mid[s1];
+                  চলক tex = get_texture(tex_name);
+                  চলক texture_width = 64;
+                  চলক texture_height = 64;
+                  যদি (tex != নাই) {
+                    চলক def = texture_defs[tex_name];
+                    texture_width = def["width"];
+                    texture_height = def["height"];
+                  }
+
+                  চলক inv_ry1 = 1.0 / ry1;
+                  চলক inv_ry2 = 1.0 / ry2;
+                  চলক u_coeff = wall_len * inv_ry2;
+
                   চলক x = x_start;
                   যেতিয়া (x <= x_end) {
                     চলক t = 0.0;
@@ -1346,11 +1532,11 @@
                     চলক y_bot = sy1_bot + t * (sy2_bot - sy1_bot);
 
                     চলক y_start = floor(m_max(0.0, m_min(y_top, y_bot)));
-                    চলক y_end = floor(m_min(199.0, m_max(y_top, y_bot)));
+                    চলক y_end = floor(m_min(উচ্চতা_সীমা, m_max(y_top, y_bot)));
 
                     যদি (is_portal) {
                       চলক yt = floor(y_top);
-                      যদি (yt >= 0 আৰু yt < 200) {
+                      যদি (yt >= 0 আৰু yt < উচ্চতা) {
                         চলক offset = (yt * প্ৰস্থ + x) * 4;
                         screen_buffer[offset] = r;
                         screen_buffer[offset + 1] = g;
@@ -1358,7 +1544,7 @@
                         screen_buffer[offset + 3] = 255;
                       }
                       চলক yb = floor(y_bot);
-                      যদি (yb >= 0 আৰু yb < 200) {
+                      যদি (yb >= 0 আৰু yb < উচ্চতা) {
                         চলক offset = (yb * প্ৰস্থ + x) * 4;
                         screen_buffer[offset] = r;
                         screen_buffer[offset + 1] = g;
@@ -1366,14 +1552,41 @@
                         screen_buffer[offset + 3] = 255;
                       }
                     } নহলে {
-                      চলক y = y_start;
-                      যেতিয়া (y <= y_end) {
-                        চলক offset = (y * প্ৰস্থ + x) * 4;
-                        screen_buffer[offset] = r;
-                        screen_buffer[offset + 1] = g;
-                        screen_buffer[offset + 2] = b;
-                        screen_buffer[offset + 3] = 255;
-                        y = y + 1;
+                      যদি (tex != নাই) {
+                        চলক ry = 1.0 / (inv_ry1 + t * (inv_ry2 - inv_ry1));
+                        চলক u = ry * t * u_coeff + side_off_x[s1];
+                        চলক tex_u = u & (texture_width - 1);
+
+                        চলক dy_col = y_bot - y_top;
+                        যদি (dy_col < 0.1) dy_col = 0.1;
+                        চলক step_v = texture_height / dy_col;
+                        চলক v = (y_start - y_top) * step_v + side_off_y[s1];
+
+                        চলক mask_v = texture_height - 1;
+                        চলক y = y_start;
+                        যেতিয়া (y <= y_end) {
+                          চলক tex_v = v & mask_v;
+
+                          চলক color_idx = tex[tex_v * texture_width + tex_u];
+                          চলক offset = (y * প্ৰস্থ + x) * 4;
+                          screen_buffer[offset] = pal_r[color_idx] * light_coeff;
+                          screen_buffer[offset + 1] = pal_g[color_idx] * light_coeff;
+                          screen_buffer[offset + 2] = pal_b[color_idx] * light_coeff;
+                          screen_buffer[offset + 3] = 255;
+
+                          v = v + step_v;
+                          y = y + 1;
+                        }
+                      } নহলে {
+                        চলক y = y_start;
+                        যেতিয়া (y <= y_end) {
+                          চলক offset = (y * প্ৰস্থ + x) * 4;
+                          screen_buffer[offset] = r;
+                          screen_buffer[offset + 1] = g;
+                          screen_buffer[offset + 2] = b;
+                          screen_buffer[offset + 3] = 255;
+                          y = y + 1;
+                        }
                       }
                     }
                     x = x + 1;
@@ -1385,9 +1598,9 @@
                     চলক edge_b = floor(255 * light_coeff);
                     
                     চলক x1 = floor(sx1);
-                    যদি (x1 >= 0 আৰু x1 < 320) {
+                    যদি (x1 >= 0 আৰু x1 < প্ৰস্থ) {
                       চলক y_start = floor(m_max(0.0, m_min(sy1_top, sy1_bot)));
-                      চলক y_end = floor(m_min(199.0, m_max(sy1_top, sy1_bot)));
+                      চলক y_end = floor(m_min(উচ্চতা_সীমা, m_max(sy1_top, sy1_bot)));
                       চলক y = y_start;
                       যেতিয়া (y <= y_end) {
                         চলক offset = (y * প্ৰস্থ + x1) * 4;
@@ -1399,9 +1612,9 @@
                       }
                     }
                     চলক x2 = floor(sx2);
-                    যদি (x2 >= 0 আৰু x2 < 320) {
+                    যদি (x2 >= 0 আৰু x2 < প্ৰস্থ) {
                       চলক y_start = floor(m_max(0.0, m_min(sy2_top, sy2_bot)));
-                      চলক y_end = floor(m_min(199.0, m_max(sy2_top, sy2_bot)));
+                      চলক y_end = floor(m_min(উচ্চতা_সীমা, m_max(sy2_top, sy2_bot)));
                       চলক y = y_start;
                       যেতিয়া (y <= y_end) {
                         চলক offset = (y * প্ৰস্থ + x2) * 4;
@@ -1432,14 +1645,14 @@
               চলক rx = dx * cos_a - dy * sin_a;
               চলক ry = dx * sin_a + dy * cos_a;
 
-              চলক sx = 160.0 + (rx * scale) / ry;
+              চলক sx = আধা_প্ৰস্থ + (rx * scale) / ry;
               
               // Project bottom and top Y
-              চলক sy_bot = floor(100.0 + (41.0 * scale) / ry);
+              চলক sy_bot = floor(আধা_উচ্চতা + (41.0 * scale) / ry);
               চলক sy_top = floor(sy_bot - (45.0 * scale) / ry);
               চলক sprite_w = floor((15.0 * scale) / ry);
 
-              যদি (sx >= -40.0 আৰু sx < 360.0) {
+              যদি (sx >= -40.0 আৰু sx < প্ৰস্থ + 40.0) {
                 // Directional shading/lighting coefficient based on distance
                 চলক light_coeff = 300.0 / ry;
                 যদি (light_coeff > 1.0) light_coeff = 1.0;
